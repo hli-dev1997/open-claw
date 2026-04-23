@@ -54,6 +54,11 @@ function resolveProviderConfig(
   const providers = cfg?.models?.providers ?? {};
   const direct = providers[provider] as ModelProviderConfig | undefined;
   if (direct) {
+    console.log(`[DEBUG] resolveProviderConfig for ${provider}:`, {
+      provider,
+      baseUrl: direct.baseUrl,
+      apiKey: direct.apiKey ? '[set]' : '[not set]',
+    });
     return direct;
   }
   const normalized = normalizeProviderId(provider);
@@ -61,12 +66,28 @@ function resolveProviderConfig(
     const matched = Object.entries(providers).find(
       ([key]) => normalizeProviderId(key) === normalized,
     );
+    if (matched?.[1]) {
+      console.log(`[DEBUG] resolveProviderConfig for ${provider} (matched):`, {
+        provider,
+        baseUrl: matched[1].baseUrl,
+        apiKey: matched[1].apiKey ? '[set]' : '[not set]',
+      });
+    }
     return matched?.[1];
   }
-  return (
+  const result = (
     (providers[normalized] as ModelProviderConfig | undefined) ??
     Object.entries(providers).find(([key]) => normalizeProviderId(key) === normalized)?.[1]
   );
+  if (result) {
+    console.log(`[DEBUG] resolveProviderConfig for ${provider} (normalized):`, {
+      provider,
+      normalized,
+      baseUrl: result.baseUrl,
+      apiKey: result.apiKey ? '[set]' : '[not set]',
+    });
+  }
+  return result;
 }
 
 export function getCustomProviderApiKey(
