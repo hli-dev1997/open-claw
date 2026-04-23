@@ -18,6 +18,7 @@ import {
   cloneFirstTemplateModel,
   findCatalogTemplate,
   matchesExactOrPrefix,
+  resolveConfiguredOpenAIBaseUrl,
 } from "./shared.js";
 
 const PROVIDER_ID = "openai";
@@ -122,13 +123,9 @@ function resolveOpenAIGpt54ForwardCompatModel(
   let templateIds: readonly string[];
   let patch: Partial<ProviderRuntimeModel>;
 
-  // Try to get baseUrl from provider config first, then from models.providers config
-  const configBaseUrl = ctx.providerConfig?.baseUrl ??
-    (ctx.config?.models?.providers?.openai as any)?.baseUrl ??
-    (ctx.config?.models?.providers?.[PROVIDER_ID] as any)?.baseUrl;
-
-  const baseUrl = configBaseUrl || "https://api.openai.com/v1";
-  console.log(`[DEBUG] resolveOpenAIGpt54ForwardCompatModel: modelId=${trimmedModelId}, baseUrl=${baseUrl}, configBaseUrl=${configBaseUrl}`);
+  // Use the proper config resolution function to get baseUrl
+  const baseUrl = resolveConfiguredOpenAIBaseUrl(ctx.config);
+  console.log(`[DEBUG] resolveOpenAIGpt54ForwardCompatModel: modelId=${trimmedModelId}, baseUrl=${baseUrl} (from config)`);
 
   if (lower === OPENAI_GPT_54_MODEL_ID) {
     templateIds = OPENAI_GPT_54_TEMPLATE_MODEL_IDS;
