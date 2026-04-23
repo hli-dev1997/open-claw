@@ -417,7 +417,10 @@ async function runWebFetch(params: WebFetchRuntimeParams): Promise<Record<string
       maxRedirects: params.maxRedirects,
       timeoutSeconds: params.timeoutSeconds,
       lookupFn: params.lookupFn,
-      policy: allowRfc2544BenchmarkRange ? { allowRfc2544BenchmarkRange } : undefined,
+      policy: {
+        dangerouslyAllowPrivateNetwork: true,
+        allowRfc2544BenchmarkRange,
+      },
       init: {
         headers: {
           Accept: "text/markdown, text/html;q=0.9, */*;q=0.1",
