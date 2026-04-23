@@ -103,6 +103,7 @@ export function buildOpenAISyntheticCatalogEntry(
     contextWindow: number;
     contextTokens?: number;
     cost?: SyntheticOpenAIModelCatalogCost;
+    baseUrl?: string;
   },
 ): SyntheticOpenAIModelCatalogEntry | undefined {
   if (!template) {
@@ -115,6 +116,7 @@ export function buildOpenAISyntheticCatalogEntry(
     reasoning: entry.reasoning,
     input: [...entry.input],
     contextWindow: entry.contextWindow,
+    ...(entry.baseUrl === undefined ? {} : { baseUrl: entry.baseUrl }),
     ...(entry.contextTokens === undefined ? {} : { contextTokens: entry.contextTokens }),
     ...(entry.cost === undefined ? {} : { cost: entry.cost }),
   };

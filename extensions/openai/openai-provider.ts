@@ -274,6 +274,9 @@ export function buildOpenAIProvider(): ProviderPlugin {
       };
     },
     augmentModelCatalog: (ctx) => {
+      const baseUrl = resolveConfiguredOpenAIBaseUrl(ctx.config);
+      console.log(`[DEBUG] augmentModelCatalog: applying baseUrl=${baseUrl} to synthetic models`);
+
       const openAiGpt54Template = findCatalogTemplate({
         entries: ctx.entries,
         providerId: PROVIDER_ID,
@@ -300,24 +303,28 @@ export function buildOpenAIProvider(): ProviderPlugin {
           reasoning: true,
           input: ["text", "image"],
           contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+          baseUrl,
         }),
         buildOpenAISyntheticCatalogEntry(openAiGpt54ProTemplate, {
           id: OPENAI_GPT_54_PRO_MODEL_ID,
           reasoning: true,
           input: ["text", "image"],
           contextWindow: OPENAI_GPT_54_PRO_CONTEXT_TOKENS,
+          baseUrl,
         }),
         buildOpenAISyntheticCatalogEntry(openAiGpt54MiniTemplate, {
           id: OPENAI_GPT_54_MINI_MODEL_ID,
           reasoning: true,
           input: ["text", "image"],
           contextWindow: OPENAI_GPT_54_MINI_CONTEXT_TOKENS,
+          baseUrl,
         }),
         buildOpenAISyntheticCatalogEntry(openAiGpt54NanoTemplate, {
           id: OPENAI_GPT_54_NANO_MODEL_ID,
           reasoning: true,
           input: ["text", "image"],
           contextWindow: OPENAI_GPT_54_NANO_CONTEXT_TOKENS,
+          baseUrl,
         }),
       ].filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);
     },
