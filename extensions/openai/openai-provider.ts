@@ -73,10 +73,19 @@ function shouldUseOpenAIResponsesTransport(params: {
     return false;
   }
   const isOwnerProvider = normalizeProviderId(params.provider) === PROVIDER_ID;
-  if (isOwnerProvider) {
-    return !params.baseUrl || isOpenAIApiBaseUrl(params.baseUrl);
-  }
-  return typeof params.baseUrl === "string" && isOpenAIApiBaseUrl(params.baseUrl);
+  const result = isOwnerProvider
+    ? !params.baseUrl || isOpenAIApiBaseUrl(params.baseUrl)
+    : typeof params.baseUrl === "string" && isOpenAIApiBaseUrl(params.baseUrl);
+
+  console.log(`[DEBUG] shouldUseOpenAIResponsesTransport:`, {
+    provider: params.provider,
+    isOwnerProvider,
+    api: params.api,
+    baseUrl: params.baseUrl,
+    result,
+  });
+
+  return result;
 }
 
 function normalizeOpenAITransport(model: ProviderRuntimeModel): ProviderRuntimeModel {
@@ -86,10 +95,19 @@ function normalizeOpenAITransport(model: ProviderRuntimeModel): ProviderRuntimeM
     baseUrl: model.baseUrl,
   });
 
+  console.log(`[DEBUG] OpenAI Transport Normalization:`, {
+    modelId: model.id,
+    baseUrl: model.baseUrl,
+    api: model.api,
+    useResponsesTransport,
+  });
+
   if (!useResponsesTransport) {
+    console.log(`[DEBUG]   Using original transport for ${model.id}`);
     return model;
   }
 
+  console.log(`[DEBUG]   Using openai-responses transport for ${model.id}`);
   return {
     ...model,
     api: "openai-responses",

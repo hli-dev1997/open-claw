@@ -420,6 +420,14 @@ export async function resolveApiKeyForProvider(params: {
 }): Promise<ResolvedProviderAuth> {
   const { provider, cfg, profileId, preferredProfile } = params;
 
+  console.log(`[DEBUG] resolveApiKeyForProvider called:`, {
+    provider,
+    profileId,
+    preferredProfile,
+    lockedProfile: params.lockedProfile,
+    credentialPrecedence: params.credentialPrecedence,
+  });
+
   if (profileId) {
     const store = params.store ?? ensureAuthProfileStore(params.agentDir);
     const resolved = await resolveApiKeyForProfile({
@@ -544,21 +552,29 @@ export async function resolveApiKeyForProvider(params: {
       source: envResolved.source,
       mode: resolvedMode,
     };
+    const maskedKey = envResolved.apiKey.substring(0, 10) + '...' + envResolved.apiKey.substring(envResolved.apiKey.length - 5);
+    console.log(`[DEBUG] ✓ Resolved API key for ${provider} from ${result.source} (mode: ${result.mode}, key: ${maskedKey})`);
     return result;
   }
 
   const customKey = resolveUsableCustomProviderApiKey({ cfg, provider });
   if (customKey) {
     const result = { apiKey: customKey.apiKey, source: customKey.source, mode: "api-key" as const };
+    const maskedKey = customKey.apiKey.substring(0, 10) + '...' + customKey.apiKey.substring(customKey.apiKey.length - 5);
+    console.log(`[DEBUG] ✓ Resolved API key for ${provider} from config (source: ${result.source}, key: ${maskedKey})`);
     return result;
   }
 
   if (deferredAuthProfileResult) {
+    const maskedKey = deferredAuthProfileResult.apiKey.substring(0, 10) + '...' + deferredAuthProfileResult.apiKey.substring(deferredAuthProfileResult.apiKey.length - 5);
+    console.log(`[DEBUG] ✓ Using deferred auth profile for ${provider} (source: ${deferredAuthProfileResult.source}, key: ${maskedKey})`);
     return deferredAuthProfileResult;
   }
 
   const syntheticLocalAuth = resolveSyntheticLocalProviderAuth({ cfg, provider });
   if (syntheticLocalAuth) {
+    const maskedKey = syntheticLocalAuth.apiKey.substring(0, 10) + '...' + syntheticLocalAuth.apiKey.substring(syntheticLocalAuth.apiKey.length - 5);
+    console.log(`[DEBUG] ✓ Using synthetic local auth for ${provider} (source: ${syntheticLocalAuth.source}, key: ${maskedKey})`);
     return syntheticLocalAuth;
   }
 

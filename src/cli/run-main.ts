@@ -148,6 +148,29 @@ function shouldLoadCliDotEnv(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export async function runCli(argv: string[] = process.argv) {
+  // Debug logging for environment variables
+  console.log("[DEBUG] ========== OpenClaw Environment Variables ==========");
+  const relevantEnvVars = [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_OAUTH_TOKEN",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "OPENCLAW_DEFAULT_MODEL",
+  ];
+  for (const envVar of relevantEnvVars) {
+    const value = process.env[envVar];
+    if (value) {
+      const maskedValue = value.length > 15
+        ? value.substring(0, 10) + "..." + value.substring(value.length - 5)
+        : "[set]";
+      console.log(`[DEBUG] ${envVar}: ${maskedValue}`);
+    } else {
+      console.log(`[DEBUG] ${envVar}: [not set]`);
+    }
+  }
+  console.log("[DEBUG] ========================================================");
+
   const originalArgv = normalizeWindowsArgv(argv);
   const parsedContainer = parseCliContainerArgs(originalArgv);
   if (!parsedContainer.ok) {

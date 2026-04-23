@@ -43,23 +43,34 @@ export function resolveEnvApiKey(
   const normalized = resolveProviderIdForAuth(provider, { env });
   const candidateMap = resolveProviderEnvApiKeyCandidates({ env });
   const applied = new Set(getShellEnvAppliedKeys());
+
+  // Debug logging
+  console.log(`[DEBUG] resolveEnvApiKey called for provider: ${provider} (normalized: ${normalized})`);
+
   const pick = (envVar: string): EnvApiKeyResult | null => {
     const value = normalizeOptionalSecretInput(env[envVar]);
     if (!value) {
+      console.log(`[DEBUG]   ${envVar}: not set or empty`);
       return null;
     }
     const source = applied.has(envVar) ? `shell env: ${envVar}` : `env: ${envVar}`;
+    const maskedValue = value.substring(0, 10) + '...' + value.substring(value.length - 5);
+    console.log(`[DEBUG]   ${envVar}: found (source: ${source}, value: ${maskedValue})`);
     return { apiKey: value, source };
   };
 
   const candidates = Object.hasOwn(candidateMap, normalized) ? candidateMap[normalized] : undefined;
+  console.log(`[DEBUG]   candidates for ${normalized}:`, candidates);
+
   if (Array.isArray(candidates)) {
     for (const envVar of candidates) {
       const resolved = pick(envVar);
       if (resolved) {
+        console.log(`[DEBUG]   ✓ Using ${resolved.source} for ${provider}`);
         return resolved;
       }
     }
+    console.log(`[DEBUG]   ✗ No API key found for ${provider}`);
     return null;
   }
 
