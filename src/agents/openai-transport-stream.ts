@@ -639,6 +639,7 @@ function createOpenAIResponsesClient(
   optionHeaders?: Record<string, string>,
   turnHeaders?: Record<string, string>,
 ) {
+  console.log(`[DEBUG] createOpenAIClient: creating client with baseURL=${model.baseUrl} (model=${model.id})`);
   return new OpenAI({
     apiKey,
     baseURL: model.baseUrl,
@@ -650,6 +651,7 @@ function createOpenAIResponsesClient(
 
 export function createOpenAIResponsesTransportStreamFn(): StreamFn {
   return (model, context, options) => {
+    console.log(`[DEBUG] createOpenAIResponsesTransportStreamFn: model=${model.id}, provider=${model.provider}, api=${model.api}, baseUrl=${model.baseUrl}`);
     const eventStream = createAssistantMessageEventStream();
     const stream = eventStream as unknown as { push(event: unknown): void; end(): void };
     void (async () => {
