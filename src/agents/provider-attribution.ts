@@ -678,7 +678,7 @@ export function resolveProviderRequestCapabilities(
       provider !== undefined &&
       isResponsesApi &&
       OPENAI_RESPONSES_PROVIDERS.has(provider) &&
-      policy.usesKnownNativeOpenAIEndpoint,
+      (policy.usesKnownNativeOpenAIEndpoint || policy.usesExplicitProxyLikeEndpoint),
     shouldStripResponsesPromptCache,
     // Native endpoint class is the real signal here. Users can point a generic
     // provider key at Moonshot or DashScope and still need streaming usage.
