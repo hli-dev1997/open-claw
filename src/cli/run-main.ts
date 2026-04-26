@@ -25,6 +25,7 @@ import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
 } from "../shared/string-coerce.js";
+import { logAcceptedEnvOption } from "../infra/env.js";
 import { resolveCliArgvInvocation } from "./argv-invocation.js";
 import {
   shouldRegisterPrimaryCommandOnly,
@@ -148,29 +149,6 @@ function shouldLoadCliDotEnv(env: NodeJS.ProcessEnv = process.env): boolean {
 }
 
 export async function runCli(argv: string[] = process.argv) {
-  // Debug logging for environment variables
-  console.log("[DEBUG] ========== OpenClaw Environment Variables ==========");
-  const relevantEnvVars = [
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_OAUTH_TOKEN",
-    "OPENAI_API_KEY",
-    "OPENAI_BASE_URL",
-    "OPENCLAW_DEFAULT_MODEL",
-  ];
-  for (const envVar of relevantEnvVars) {
-    const value = process.env[envVar];
-    if (value) {
-      const maskedValue = value.length > 15
-        ? value.substring(0, 10) + "..." + value.substring(value.length - 5)
-        : "[set]";
-      console.log(`[DEBUG] ${envVar}: ${maskedValue}`);
-    } else {
-      console.log(`[DEBUG] ${envVar}: [not set]`);
-    }
-  }
-  console.log("[DEBUG] ========================================================");
-
   const originalArgv = normalizeWindowsArgv(argv);
   const parsedContainer = parseCliContainerArgs(originalArgv);
   if (!parsedContainer.ok) {
@@ -203,6 +181,36 @@ export async function runCli(argv: string[] = process.argv) {
     loadCliDotEnv({ quiet: true });
   }
   normalizeEnv();
+
+  // Log environment variables after normalization
+  logAcceptedEnvOption({
+    key: "ANTHROPIC_API_KEY",
+    description: "Anthropic API key",
+    redact: true,
+  });
+  logAcceptedEnvOption({
+    key: "ANTHROPIC_BASE_URL",
+    description: "Anthropic API base URL override",
+  });
+  logAcceptedEnvOption({
+    key: "ANTHROPIC_OAUTH_TOKEN",
+    description: "Anthropic OAuth token",
+    redact: true,
+  });
+  logAcceptedEnvOption({
+    key: "OPENAI_API_KEY",
+    description: "OpenAI API key",
+    redact: true,
+  });
+  logAcceptedEnvOption({
+    key: "OPENAI_BASE_URL",
+    description: "OpenAI API base URL override",
+  });
+  logAcceptedEnvOption({
+    key: "OPENCLAW_DEFAULT_MODEL",
+    description: "default model for agent sessions",
+  });
+
   initializeDebugProxyCapture("cli");
   process.once("exit", () => {
     finalizeDebugProxyCapture();

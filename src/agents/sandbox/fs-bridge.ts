@@ -243,7 +243,7 @@ class SandboxFsBridgeImpl implements SandboxFsBridge {
   private async readPinnedFile(target: SandboxResolvedFsPath): Promise<Buffer> {
     const opened = await this.pathGuard.openReadableFile(target);
     try {
-      return fs.readFileSync(opened.fd);
+      return Buffer.from(fs.readFileSync(opened.fd, "utf-8"));
     } finally {
       fs.closeSync(opened.fd);
     }

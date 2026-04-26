@@ -796,7 +796,7 @@ function createHostEditOperations(root: string, options?: { workspaceOnly?: bool
     return {
       readFile: async (absolutePath: string) => {
         const resolved = path.resolve(expandTildeToOsHome(absolutePath));
-        return await fs.readFile(resolved);
+        return await fs.readFile(resolved, "utf-8");
       },
       writeFile: writeHostFile,
       access: async (absolutePath: string) => {

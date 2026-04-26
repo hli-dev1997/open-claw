@@ -81,11 +81,13 @@ export function writeStableRootRuntimeAliases(params = {}) {
   }
 }
 
-export function runRuntimePostBuild(params = {}) {
+// export function runRuntimePostBuild(params = {}) {
+export async function runRuntimePostBuild(params = {}) {
   copyPluginSdkRootAlias(params);
   copyBundledPluginMetadata(params);
   writeOfficialChannelCatalog(params);
-  stageBundledPluginRuntimeDeps(params);
+  // stageBundledPluginRuntimeDeps(params);
+  await stageBundledPluginRuntimeDeps(params);
   stageBundledPluginRuntime(params);
   writeStableRootRuntimeAliases(params);
   copyStaticExtensionAssets(params);

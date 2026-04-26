@@ -10,6 +10,10 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
+function normalizePath(pathStr) {
+  return pathStr.replace(/\\/g, "/");
+}
+
 function writeJson(filePath, value) {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
@@ -129,6 +133,12 @@ function dependencyNodeModulesPath(nodeModulesDir, depName) {
 }
 
 function dependencyVersionSatisfied(spec, installedVersion) {
+  if (typeof installedVersion !== "string" || typeof spec !== "string") {
+    return false;
+  }
+  if (installedVersion.includes(path.sep) || spec.includes(path.sep)) {
+    return false;
+  }
   return semverSatisfies(installedVersion, spec, { includePrerelease: false });
 }
 
@@ -138,7 +148,13 @@ function readInstalledDependencyVersionFromRoot(depRoot) {
     return null;
   }
   const version = readJson(packageJsonPath).version;
-  return typeof version === "string" ? version : null;
+  if (typeof version !== "string") {
+    return null;
+  }
+  if (version.includes(path.sep) || version.includes("/") || version.includes("\\")) {
+    return null;
+  }
+  return version;
 }
 
 const defaultStagedRuntimeDepGlobalPruneSuffixes = [".d.ts", ".map"];
@@ -272,6 +288,7 @@ function collectInstalledRuntimeDependencyRoots(
     }
     const canonicalDepRoot = fs.realpathSync(depRoot);
 
+
     const seenKey = `${current.depName}\0${canonicalDepRoot}`;
     if (seen.has(seenKey)) {
       continue;
@@ -331,6 +348,9 @@ function copyMaterializedDependencyTree(params) {
     } catch {
       return false;
     }
+    if (!resolvedPath || typeof resolvedPath !== "string" || resolvedPath.length === 0) {
+      return false;
+    }
     const containingRoot = findContainingRealRoot(resolvedPath, allowedRealRoots);
     if (containingRoot === null) {
       return false;
@@ -340,6 +360,9 @@ function copyMaterializedDependencyTree(params) {
     }
     const nextActiveRoots = new Set(activeRoots);
     nextActiveRoots.add(containingRoot);
+    if (nextActiveRoots.size > 1000) {
+      return false;
+    }
     return copyMaterializedDependencyTree({
       activeRoots: nextActiveRoots,
       allowedRealRoots,
@@ -423,7 +446,13 @@ function resolveInstalledDirectDependencyNames(
   return directDependencyNames;
 }
 
-function appendDirectoryFingerprint(hash, rootDir, currentDir = rootDir) {
+function appendDirectoryFingerprint(hash, rootDir, currentDir = rootDir, visitedPaths = new Set()) {
+  const realCurrentDir = fs.realpathSync(currentDir);
+  if (visitedPaths.has(realCurrentDir)) {
+    return;
+  }
+  visitedPaths.add(realCurrentDir);
+
   const entries = fs
     .readdirSync(currentDir, { withFileTypes: true })
     .toSorted((left, right) => left.name.localeCompare(right.name));
@@ -437,7 +466,7 @@ function appendDirectoryFingerprint(hash, rootDir, currentDir = rootDir) {
     }
     if (entry.isDirectory()) {
       hash.update(`dir:${relativePath}\n`);
-      appendDirectoryFingerprint(hash, rootDir, fullPath);
+      appendDirectoryFingerprint(hash, rootDir, fullPath, visitedPaths);
       continue;
     }
     if (!entry.isFile()) {
@@ -633,7 +662,11 @@ function resolveInstalledWorkspacePluginRoot(repoRoot, pluginId) {
 
   let installedWorkspaceRoot;
   try {
-    installedWorkspaceRoot = path.dirname(fs.realpathSync(nodeModulesDir));
+    const realPath = fs.realpathSync(nodeModulesDir);
+    if (!realPath || typeof realPath !== "string" || realPath.length === 0) {
+      return currentPluginRoot;
+    }
+    installedWorkspaceRoot = path.dirname(realPath);
   } catch {
     return currentPluginRoot;
   }
@@ -1074,18 +1107,83 @@ function installPluginRuntimeDeps(params) {
   }
 }
 
-export function stageBundledPluginRuntimeDeps(params = {}) {
+// export function stageBundledPluginRuntimeDeps(params = {}) {
+//   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
+//   const installPluginRuntimeDepsImpl =
+//     params.installPluginRuntimeDepsImpl ?? installPluginRuntimeDeps;
+//   const installAttempts = params.installAttempts ?? 3;
+//   const pruneConfig = resolveRuntimeDepPruneConfig(params);
+//   for (const pluginDir of listBundledPluginRuntimeDirs(repoRoot)) {
+//     const pluginId = path.basename(pluginDir);
+//     const sourcePluginRoot = resolveInstalledWorkspacePluginRoot(repoRoot, pluginId);
+//     const directDependencyPackageRoot = fs.existsSync(path.join(sourcePluginRoot, "package.json"))
+//       ? sourcePluginRoot
+//       : null;
+//     const packageJson = sanitizeBundledManifestForRuntimeInstall(pluginDir);
+//     const nodeModulesDir = path.join(pluginDir, "node_modules");
+//     const stampPath = resolveRuntimeDepsStampPath(pluginDir);
+//     if (!hasRuntimeDeps(packageJson) || !shouldStageRuntimeDeps(packageJson)) {
+//       removePathIfExists(nodeModulesDir);
+//       removePathIfExists(stampPath);
+//       continue;
+//     }
+//     const rootInstalledRuntimeFingerprint = resolveInstalledRuntimeClosureFingerprint({
+//       directDependencyPackageRoot,
+//       packageJson,
+//       rootNodeModulesDir: path.join(repoRoot, "node_modules"),
+//     });
+//     const fingerprint = createRuntimeDepsFingerprint(packageJson, pruneConfig, {
+//       repoRoot,
+//       rootInstalledRuntimeFingerprint,
+//     });
+//     const stamp = readRuntimeDepsStamp(stampPath);
+//     if (fs.existsSync(nodeModulesDir) && stamp?.fingerprint === fingerprint) {
+//       continue;
+//     }
+//     if (
+//       stageInstalledRootRuntimeDeps({
+//         directDependencyPackageRoot,
+//         fingerprint,
+//         packageJson,
+//         pluginDir,
+//         pruneConfig,
+//         repoRoot,
+//       })
+//     ) {
+//       continue;
+//     }
+//     try {
+//       installPluginRuntimeDepsWithRetries({
+//         attempts: installAttempts,
+//         install: installPluginRuntimeDepsImpl,
+//         installParams: {
+//           directDependencyPackageRoot,
+//           fingerprint,
+//           packageJson,
+//           pluginDir,
+//           pluginId,
+//           pruneConfig,
+//           repoRoot,
+//         },
+//       });
+//     } catch (error) {
+//       throw createRootRuntimeStagingError({ packageJson, pluginId, cause: error });
+//     }
+//   }
+// }
+
+export async function stageBundledPluginRuntimeDeps(params = {}) {
   const repoRoot = params.cwd ?? params.repoRoot ?? process.cwd();
   const installPluginRuntimeDepsImpl =
-    params.installPluginRuntimeDepsImpl ?? installPluginRuntimeDeps;
+      params.installPluginRuntimeDepsImpl ?? installPluginRuntimeDeps;
   const installAttempts = params.installAttempts ?? 3;
   const pruneConfig = resolveRuntimeDepPruneConfig(params);
   for (const pluginDir of listBundledPluginRuntimeDirs(repoRoot)) {
     const pluginId = path.basename(pluginDir);
     const sourcePluginRoot = resolveInstalledWorkspacePluginRoot(repoRoot, pluginId);
     const directDependencyPackageRoot = fs.existsSync(path.join(sourcePluginRoot, "package.json"))
-      ? sourcePluginRoot
-      : null;
+        ? sourcePluginRoot
+        : null;
     const packageJson = sanitizeBundledManifestForRuntimeInstall(pluginDir);
     const nodeModulesDir = path.join(pluginDir, "node_modules");
     const stampPath = resolveRuntimeDepsStampPath(pluginDir);
@@ -1094,11 +1192,20 @@ export function stageBundledPluginRuntimeDeps(params = {}) {
       removePathIfExists(stampPath);
       continue;
     }
-    const rootInstalledRuntimeFingerprint = resolveInstalledRuntimeClosureFingerprint({
-      directDependencyPackageRoot,
-      packageJson,
-      rootNodeModulesDir: path.join(repoRoot, "node_modules"),
-    });
+    let rootInstalledRuntimeFingerprint = null;
+    try {
+      const fingerprintPromise = new Promise((resolve) => {
+        resolve(resolveInstalledRuntimeClosureFingerprint({
+          directDependencyPackageRoot,
+          packageJson,
+          rootNodeModulesDir: path.join(repoRoot, "node_modules"),
+        }));
+      });
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+      rootInstalledRuntimeFingerprint = await Promise.race([fingerprintPromise, timeoutPromise]);
+    } catch {
+      rootInstalledRuntimeFingerprint = null;
+    }
     const fingerprint = createRuntimeDepsFingerprint(packageJson, pruneConfig, {
       repoRoot,
       rootInstalledRuntimeFingerprint,
@@ -1108,14 +1215,14 @@ export function stageBundledPluginRuntimeDeps(params = {}) {
       continue;
     }
     if (
-      stageInstalledRootRuntimeDeps({
-        directDependencyPackageRoot,
-        fingerprint,
-        packageJson,
-        pluginDir,
-        pruneConfig,
-        repoRoot,
-      })
+        stageInstalledRootRuntimeDeps({
+          directDependencyPackageRoot,
+          fingerprint,
+          packageJson,
+          pluginDir,
+          pruneConfig,
+          repoRoot,
+        })
     ) {
       continue;
     }
