@@ -6,9 +6,14 @@
     <title>OpenClaw Control</title>
     <!--解决赶在那些带有 process 的庞大 JS 业务代码执行之前，人为地给浏览器的 window 对象塞进一个叫 process 的假对象，并且里面带有一个空的 env 属性。
     当后面的业务代码再次执行到 process.env.NODE_ENV 时，它获取到的仅仅是一个 undefined，但绝对不会再引发 ReferenceError 崩溃了！-->
-    <script>
-      window.process = { env: {} };
-    </script>
+    <!--这个垫片加载时机太晚，或者被其他地方的代码覆盖掉了，导致 home-dir.ts:72 执行时 process.cwd 已经不是函数了-->
+<!--    <script>-->
+<!--      // 提供完整的 Node.js 环境垫片，骗过前端的越权调用-->
+<!--      window.process = {-->
+<!--        env: {},-->
+<!--        cwd: function() { return '/'; }-->
+<!--      };-->
+<!--    </script>-->
 
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
