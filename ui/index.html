@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>OpenClaw Control</title>
+    <!--解决赶在那些带有 process 的庞大 JS 业务代码执行之前，人为地给浏览器的 window 对象塞进一个叫 process 的假对象，并且里面带有一个空的 env 属性。
+    当后面的业务代码再次执行到 process.env.NODE_ENV 时，它获取到的仅仅是一个 undefined，但绝对不会再引发 ReferenceError 崩溃了！-->
+    <script>
+      window.process = { env: {} };
+    </script>
+
     <meta name="color-scheme" content="dark light" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
