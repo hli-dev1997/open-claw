@@ -1404,6 +1404,7 @@ export async function runAgentTurnWithFallback(params: {
               sessionKey: params.sessionKey,
             });
             try {
+              console.log("🔴 断点测试：runEmbeddedPiAgent 即将被调用，tools=", JSON.stringify((embeddedContext as any).tools?.map?.((t: any) => t?.function?.name ?? t?.name) ?? []));
               const result = await runEmbeddedPiAgent({
                 ...embeddedContext,
                 allowGatewaySubagentBinding: true,

@@ -544,7 +544,10 @@ export function runAgentAttempt(params: {
       }
     });
   }
-
+  console.log("🔴 断点测试：runAgentAttempt 被调用了");  // ← 加这一行
+  //todo *** 断点②：每次问答触发 Agent 执行时的入口
+  //todo *** 只要 Agent 需要调用 LLM 回复用户，必到此函数
+  //todo *** 适合调试 system prompt 组装、工具选择、模型调用全过程
   return runEmbeddedPiAgent({
     sessionId: params.sessionId,
     sessionKey: params.sessionKey,

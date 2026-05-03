@@ -575,7 +575,11 @@ const getInterruptedSpawnExitCode = (res) => {
 };
 
 const runOpenClaw = async (deps) => {
-  const nodeProcess = deps.spawn(deps.execPath, ["openclaw.mjs", ...deps.args], {
+  //todo 调试模式：如果父进程带了 --inspect 或 --inspect-brk，子进程用 9230 端口继续暴露调试接口
+  const parentArgs = process.execArgv ?? [];
+  const isDebugMode = parentArgs.some(a => a.startsWith("--inspect") || a.startsWith("--debug"));
+  const debugArgs = isDebugMode ? ["--inspect=9230", "--enable-source-maps"] : ["--enable-source-maps"];
+  const nodeProcess = deps.spawn(deps.execPath, [...debugArgs, "openclaw.mjs", ...deps.args], {
     cwd: deps.cwd,
     env: deps.env,
     stdio: deps.outputTee ? ["inherit", "pipe", "pipe"] : "inherit",

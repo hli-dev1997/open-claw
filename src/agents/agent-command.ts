@@ -477,6 +477,7 @@ async function agentCommandInternal(
     }
 
     if (!isRawModelRun && acpResolution?.kind === "ready" && sessionKey) {
+      console.log("🔴 断点测试：!isRawModelRun && acpResolution?.kind 被调用了");
       const attemptExecutionRuntime = await loadAttemptExecutionRuntime();
       const startedAt = Date.now();
       registerAgentRunContext(runId, {
@@ -1241,7 +1242,7 @@ export async function agentCommand(
     deps,
   );
 }
-
+//todo *** 所有从 HTTP/WebSocket 进来的问答请求的统一入口
 export async function agentCommandFromIngress(
   opts: AgentCommandIngressOpts,
   runtime: RuntimeEnv = defaultRuntime,
