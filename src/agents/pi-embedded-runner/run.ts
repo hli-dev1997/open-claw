@@ -299,9 +299,13 @@ function buildHandledReplyPayloads(reply?: ReplyPayload) {
   ];
 }
 
+// 步骤4：核心 Agent 运行循环（Run Loop）—— 组装历史记忆、构建 Prompt、调用 LLM、处理重试
+// 这是 Agent 的核心执行引擎，处理模型解析、认证、超时、上下文压缩（Compaction）、
+// 失败重试（Failover）、Auth Profile 切换等全生命周期
 export async function runEmbeddedPiAgent(
   params: RunEmbeddedPiAgentParams,
 ): Promise<EmbeddedPiRunResult> {
+  console.log("[OpenClaw-Trace] 步骤4: 进入嵌入式 Agent 主运行循环 (runEmbeddedPiAgent) | sessionId:", params.sessionId, "provider:", params.provider, "model:", params.model);
   // Resolve sessionKey early so all downstream consumers (hooks, LCM, compaction)
   // receive a non-null key even when callers omit it. See #60552.
   const effectiveSessionKey = backfillSessionKey({
@@ -1015,6 +1019,9 @@ export async function runEmbeddedPiAgent(
             startupStagesEmitted = true;
           }
 
+          // 步骤4.1-4.2：进入 attempt 层 —— 从 Session（会话）文件中读取历史对话记录
+          // 拼接 System Prompt + Context（上下文）+ 用户输入，构建发送给 LLM 的 Payload
+          console.log("[OpenClaw-Trace] 步骤4.1: 开始构建 LLM 请求 Payload，准备读取历史会话并组装 Context | sessionId:", activeSessionId, "provider:", provider, "model:", modelId);
           const rawAttempt = await runEmbeddedAttemptWithBackend({
             sessionId: activeSessionId,
             sessionKey: resolvedSessionKey,
@@ -2040,6 +2047,7 @@ export async function runEmbeddedPiAgent(
           const finalAssistantVisibleText = resolveFinalAssistantVisibleText(sessionLastAssistant);
           const finalAssistantRawText = resolveFinalAssistantRawText(sessionLastAssistant);
 
+          // 步骤4.3：构建发送给 LLM 的返回 Payload（载荷）—— 将推理结果转为 ReplyPayload
           const payloads = buildEmbeddedRunPayloads({
             assistantTexts: attempt.assistantTexts,
             toolMetas: attempt.toolMetas,
