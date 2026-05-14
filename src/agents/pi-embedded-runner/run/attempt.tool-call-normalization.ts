@@ -191,6 +191,8 @@ function looksLikeMalformedToolNameCounter(rawName: string): boolean {
   );
 }
 
+// 步骤6：解析 LLM 返回的 tool_use/function_call（函数调用）意图，将原始 Tool 名称标准化后分派到具体的执行器
+// 注意：此函数被流处理+历史修复双路径调用，日志移到上层调用点（stream wrapper）避免历史遍历刷屏
 function normalizeToolCallNameForDispatch(
   rawName: string,
   allowedToolNames?: Set<string>,
@@ -220,6 +222,9 @@ function normalizeToolCallNameForDispatch(
   return resolveStructuredAllowedToolName(trimmed, allowedToolNames) ?? trimmed;
 }
 
+// 步骤4.5/6: 流式意图解析 —— 识别从 LLM 返回的 content block（内容块）中是否包含
+// function_call/tool_use/toolCall 标识，触发工具分发逻辑
+// 注意：此函数被内层流循环大量调用，日志移到上层调用点以避免碎片重复
 function isToolCallBlockType(type: unknown): boolean {
   return type === "toolCall" || type === "toolUse" || type === "functionCall";
 }
@@ -789,6 +794,17 @@ function wrapStreamTrimToolCallNames(
       countAttempt: !streamAttemptAlreadyCounted,
       resetOnAllowedTool: true,
     });
+    // 步骤6：仅在当前流响应结束时（stream.result）打印 ToolCall 意图，避免历史遍历刷屏
+    if (message && typeof message === 'object') {
+      const content = (message as { content?: unknown[] }).content;
+      if (Array.isArray(content)) {
+        const toolBlock = content.find(b => b && typeof b === 'object' && isToolCallBlockType((b as { type?: unknown }).type));
+        if (toolBlock) {
+          const tb = toolBlock as { name?: string; id?: string };
+          console.log("[OpenClaw-Trace] 步骤6: 当前 LLM 流式响应结束，检测到 ToolCall（仅首次） | toolName:", tb.name ?? 'unknown', "toolCallId:", tb.id ?? 'unknown');
+        }
+      }
+    }
     return message;
   };
 

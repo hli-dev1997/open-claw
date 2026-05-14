@@ -786,6 +786,7 @@ export async function runEmbeddedAttempt(
         ...(err ? { errorCategory: diagnosticErrorCategory(err) } : {}),
       });
     };
+    // 步骤6：创建 Agent 可用工具集（Tool Calling/函数调用），包含 coding tools、消息发送、文件操作等
     const toolsRaw =
       params.disableTools || isRawModelRun
         ? []
@@ -884,6 +885,7 @@ export async function runEmbeddedAttempt(
       bootstrapMode,
       sessionFile: params.sessionFile,
       hasCompletedBootstrapTurn,
+      // 步骤4.1：从 Session（会话）文件中读取历史对话记录
       resolveBootstrapContextForRun: async () =>
         await resolveBootstrapContextForRun({
           workspaceDir: resolvedWorkspace,
@@ -1199,6 +1201,7 @@ export async function runEmbeddedAttempt(
         context: promptContributionContext,
       });
 
+    // 步骤4.2：拼接 System Prompt（系统提示词）+ Context（上下文）+ 用户输入
     const builtAppendPrompt =
       resolveSystemPromptOverride({
         config: params.config,
@@ -1430,6 +1433,7 @@ export async function runEmbeddedAttempt(
         sandboxEnabled: !!sandbox?.enabled,
       });
 
+      // 步骤6：添加客户端 Tool（工具），用于解析 LLM 返回的 tool_use/function_call 意图
       // Add client tools (OpenResponses hosted tools) to customTools
       let clientToolCallDetected: { name: string; params: Record<string, unknown> } | null = null;
       const clientToolLoopDetection = resolveToolLoopDetectionConfig({
@@ -2886,6 +2890,7 @@ export async function runEmbeddedAttempt(
             });
             // [TRACE][节点三:智能体调度器入口] 首次调用 LLM
             const _traceN3StartedAt = Date.now();
+            // 步骤6.1：反射执行具体的 Tool（工具）方法 —— LLM 内部多轮 tool calling 循环
             console.log(`[TRACE][节点4.0:推理层-LLM推理入口] runId=${params.runId} provider=${params.provider} model=${params.modelId} contextMessages=${activeSession.messages.length} tools=${effectiveTools.length} prompt="${promptSubmission.prompt.slice(0, 200)}"`);
             if (promptSubmission.runtimeOnly) {
               await abortable(activeSession.prompt(promptSubmission.prompt));

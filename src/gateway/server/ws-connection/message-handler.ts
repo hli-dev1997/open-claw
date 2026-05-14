@@ -1520,6 +1520,7 @@ export function attachGatewayWsMessageHandler(params: {
         return;
       }
 
+      // 步骤2：WebSocket 消息路由 —— 将 WS 帧分发到对应的 RPC method handler（如 chat.send）
       // After handshake, accept only req frames
       if (!validateRequestFrame(parsed)) {
         send({

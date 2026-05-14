@@ -83,7 +83,7 @@ function logWsInfoLine(params: {
     ...params.restMeta,
     ...params.trailing,
   ].filter((t): t is string => Boolean(t));
-  wsLog.info(tokens.join(" "));
+  // wsLog.debug(tokens.join(" "));  // 已注释：避免高频 WebSocket 轮询 [ws] ⇄ res ✓ sessions.list 刷屏
 }
 
 export function shouldLogWs(): boolean {

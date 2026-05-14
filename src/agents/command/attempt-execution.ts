@@ -310,6 +310,13 @@ export async function persistCliTurnTranscript(params: {
   });
 }
 
+// 步骤3：【核心编排器】Agent Attempt执行入口——决定了本次问答使用哪种运行时
+// 判断逻辑：如果是CLI Provider（如Claude CLI）则走cli-runner，否则走Embedded PI Runner
+// 每次用户触发Agent对话，必定经过此函数。这里完成了：
+//   - 解析Agent运行时配置
+//   - 构建技能快照（Skills）
+//   - 组装认证/限流策略
+//   之后分发到具体的执行器
 export function runAgentAttempt(params: {
   providerOverride: string;
   modelOverride: string;
@@ -345,6 +352,7 @@ export function runAgentAttempt(params: {
   allowTransientCooldownProbe?: boolean;
   sessionHasHistory?: boolean;
 }) {
+  console.log("[OpenClaw-Trace] 步骤3.2: runAgentAttempt 开始执行，即将构建 Prompt 并分发到嵌入式 Agent 运行器 | sessionId:", params.sessionId, "providerOverride:", params.providerOverride, "modelOverride:", params.modelOverride);
   const isRawModelRun = params.opts.modelRun === true || params.opts.promptMode === "none";
   const claudeCliFallbackPrelude =
     !isRawModelRun &&

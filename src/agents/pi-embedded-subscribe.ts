@@ -113,6 +113,9 @@ function collectPendingMediaFromInternalEvents(
 
 export type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 
+// 步骤7：订阅并监听 Agent Session 输出流，将结果或中间状态通过 Event Stream（事件流）推送回客户端
+// 处理 text_delta（文本增量）、thinking_delta（思考增量）、tool_result（工具结果）等事件
+// 通过 onBlockReply / onReasoningStream / onToolResult 等回调将流式数据传出
 export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionParams) {
   const reasoningMode = params.reasoningMode ?? "off";
   const canShowReasoning = params.thinkingLevel !== "off";
@@ -220,6 +223,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
               assistantMessageIndex: options.assistantMessageIndex,
             })
           : payload;
+      console.log("[OpenClaw-Trace] 步骤7: 通过 onBlockReply 回调将文本块推送给客户端 | 文本前50字:", (payload?.text || "").slice(0, 50));
       const maybeTask = params.onBlockReply(taggedPayload);
       if (!isPromiseLike<void>(maybeTask)) {
         return;
@@ -535,6 +539,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
+      console.log("[OpenClaw-Trace] 步骤6.1: Tool 工具执行结果已返回，通过 onToolResult 推送 | toolName:", toolName, "结果前50字:", (cleanedText || "").slice(0, 50));
       void params.onToolResult({
         text: cleanedText,
         mediaUrls: filteredMediaUrls.length ? filteredMediaUrls : undefined,

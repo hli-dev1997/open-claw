@@ -524,6 +524,7 @@ export function createGatewayHttpServer(opts: {
     );
   }
 
+  // 步骤1：接收 HTTP 请求的入口函数（来自用户浏览器或客户端）
   async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     setDefaultSecurityHeaders(res, {
       strictTransportSecurity: strictTransportSecurityHeader,

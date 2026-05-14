@@ -1442,6 +1442,7 @@ export function createExecTool(
     },
     parameters: execSchema,
     execute: async (_toolCallId, args, signal, onUpdate) => {
+      console.log("[OpenClaw-Trace] 步骤6.2: 正在执行本地工具函数 (bash execTool) | toolCallId:", _toolCallId, "command前50字:", JSON.stringify(((args as any)?.command || "").slice(0, 50)));
       const params = args as {
         command: string;
         workdir?: string;

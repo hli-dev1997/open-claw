@@ -1809,7 +1809,9 @@ export const chatHandlers: GatewayRequestHandlers = {
       runIds: res.aborted ? [runId] : [],
     });
   },
+  // 步骤1：接收用户 chat.send RPC 请求，解析消息内容
   "chat.send": async ({ params, respond, context, client }) => {
+    console.log("[OpenClaw-Trace] 步骤1: 接收到用户 chat.send RPC 请求 | sessionKey:", (params as any)?.sessionKey, "message前50字:", ((params as any)?.message || "").slice(0, 50));
     if (!validateChatSendParams(params)) {
       respond(
         false,
@@ -2325,6 +2327,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
 
       let agentRunStarted = false;
+      // 步骤2：将消息分发到 Agent 调度管线 —— 进入 auto-reply 模块
       void dispatchInboundMessage({
         ctx,
         cfg,

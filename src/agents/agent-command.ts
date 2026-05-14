@@ -1223,11 +1223,14 @@ async function agentCommandInternal(
   }
 }
 
+// 步骤3：Agent 调度器入口（CLI/本地入口），编排执行计划
+// 此函数是 agentCommandInternal 的包装，为 CLI/本地调用设置信任级别（senderIsOwner=true）
 export async function agentCommand(
   opts: AgentCommandOpts,
   runtime: RuntimeEnv = defaultRuntime,
   deps?: CliDeps,
 ) {
+  console.log("[OpenClaw-Trace] 步骤3: Agent 调度器入口被调用 | sessionKey:", opts.sessionKey, "provider:", opts.provider, "model:", opts.model);
   return await agentCommandInternal(
     {
       ...opts,
@@ -1242,7 +1245,9 @@ export async function agentCommand(
     deps,
   );
 }
-//todo *** 所有从 HTTP/WebSocket 进来的问答请求的统一入口
+// 步骤3.1：从入站消息（HTTP/WebSocket）触发 Agent 执行
+// 此函数是网络层到 Agent 执行层的桥接点，网络入口必须显式声明 senderIsOwner
+// 将 CommandInput 传给 agentCommandInternal，进入核心调度链路
 export async function agentCommandFromIngress(
   opts: AgentCommandIngressOpts,
   runtime: RuntimeEnv = defaultRuntime,
