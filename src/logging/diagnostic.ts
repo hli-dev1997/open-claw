@@ -285,19 +285,20 @@ function emitDiagnosticLivenessWarning(
   sample: DiagnosticLivenessSample,
   work: DiagnosticWorkSnapshot,
 ): void {
-  diag.warn(
-    `liveness warning: reasons=${sample.reasons.join(",")} interval=${Math.round(
-      sample.intervalMs / 1000,
-    )}s eventLoopDelayP99Ms=${formatOptionalDiagnosticMetric(
-      sample.eventLoopDelayP99Ms,
-    )} eventLoopDelayMaxMs=${formatOptionalDiagnosticMetric(
-      sample.eventLoopDelayMaxMs,
-    )} eventLoopUtilization=${formatOptionalDiagnosticMetric(
-      sample.eventLoopUtilization,
-    )} cpuCoreRatio=${formatOptionalDiagnosticMetric(sample.cpuCoreRatio)} active=${
-      work.activeCount
-    } waiting=${work.waitingCount} queued=${work.queuedCount}`,
-  );
+  // 已注释：避免 [diagnostic] liveness warning 高频刷屏
+  // diag.warn(
+  //   `liveness warning: reasons=${sample.reasons.join(",")} interval=${Math.round(
+  //     sample.intervalMs / 1000,
+  //   )}s eventLoopDelayP99Ms=${formatOptionalDiagnosticMetric(
+  //     sample.eventLoopDelayP99Ms,
+  //   )} eventLoopDelayMaxMs=${formatOptionalDiagnosticMetric(
+  //     sample.eventLoopDelayMaxMs,
+  //   )} eventLoopUtilization=${formatOptionalDiagnosticMetric(
+  //     sample.eventLoopUtilization,
+  //   )} cpuCoreRatio=${formatOptionalDiagnosticMetric(sample.cpuCoreRatio)} active=${
+  //     work.activeCount
+  //   } waiting=${work.waitingCount} queued=${work.queuedCount}`,
+  // );
   emitDiagnosticEvent({
     type: "diagnostic.liveness.warning",
     reasons: sample.reasons,

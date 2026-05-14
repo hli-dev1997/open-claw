@@ -327,6 +327,7 @@ function containsRealConversationMessages(messages: AgentMessage[]): boolean {
 export async function compactEmbeddedPiSessionDirect(
   params: CompactEmbeddedPiSessionParams,
 ): Promise<EmbeddedPiCompactResult> {
+  // 作用：上下文压缩入口——当 Token 接近上下文窗口上限时，将历史消息压缩为摘要，是 Agent 长对话能力的核心
   const startedAt = Date.now();
   const diagId = params.diagId?.trim() || createCompactionDiagId();
   const trigger = params.trigger ?? "manual";
@@ -353,6 +354,8 @@ export async function compactEmbeddedPiSessionDirect(
   let thinkLevel: ThinkLevel = params.thinkLevel ?? "off";
   const attemptedThinking = new Set<ThinkLevel>();
   const fail = (reason: string): EmbeddedPiCompactResult => {
+    // [ERROR][节点C.E:压缩层-Compaction失败] 压缩过程中发生错误，返回失败结果
+    console.log(`[ERROR][节点C.E:压缩层-Compaction失败] runId="${runId}" sessionId="${params.sessionId}" sessionKey="${params.sessionKey ?? "none"}" reason="${reason.substring(0, 100)}..." elapsedMs=${Date.now() - startedAt}`);
     const failureReason = classifyCompactionReason(reason);
     const detail =
       failureReason === "unknown" ? formatUnknownCompactionReasonDetail(reason) : undefined;
@@ -1033,6 +1036,8 @@ export async function compactEmbeddedPiSessionDirect(
           }
 
           const compactStartedAt = Date.now();
+          // [TRACE][节点C1:压缩层-Compaction开始] 上下文压缩正式启动，记录压缩前快照信息
+          console.log(`[TRACE][节点C1:压缩层-Compaction开始] runId="${runId}" sessionId="${params.sessionId}" sessionKey="${params.sessionKey ?? "none"}" trigger="${trigger}" provider="${provider}/${modelId}" attempt=${attempt}/${maxAttempts} messageCount=${session.messages.length} estTokens=${preMetrics?.estTokens ?? "unknown"}`);
           // Measure compactedCount from the original pre-limiting transcript so compaction
           // lifecycle metrics represent total reduction through the compaction pipeline.
           const messageCountCompactionInput = messageCountOriginal;
@@ -1183,6 +1188,8 @@ export async function compactEmbeddedPiSessionDirect(
             tokensBefore: result.tokensBefore,
             firstKeptEntryId: effectiveFirstKeptEntryId,
           });
+          // [TRACE][节点C2:压缩层-Compaction完成] 上下文压缩成功，记录压缩后指标
+          console.log(`[TRACE][节点C2:压缩层-Compaction完成] runId="${runId}" sessionId="${params.sessionId}" tokensBefore=${observedTokenCount ?? result.tokensBefore ?? "unknown"} tokensAfter=${tokensAfter ?? "unknown"} compactedCount=${compactedCount} messageCountAfter=${session.messages.length} elapsedMs=${Date.now() - compactStartedAt}`);
           return {
             ok: true,
             compacted: true,

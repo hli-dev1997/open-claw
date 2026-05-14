@@ -122,6 +122,9 @@ function resolveObserveOnlyDispatchResult<TDispatchResult>(
   }) as TDispatchResult;
 }
 
+//todo *** 断点①：每条消息（QQ/WeChat/Telegram/WebChat 等任意渠道）都会经过此入口
+//todo *** 适用于调试消息接入、路由、准入逻辑
+//todo *** 但心跳（heartbeat）不会触发 agent turn，也会经过这里（eventClass.canStartAgentTurn=false 时只记录不回复）
 export async function dispatchAssembledChannelTurn(
   params: AssembledChannelTurn,
 ): Promise<DispatchedChannelTurnResult> {

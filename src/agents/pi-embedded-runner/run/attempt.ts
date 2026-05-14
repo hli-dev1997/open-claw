@@ -732,6 +732,12 @@ export async function runEmbeddedAttempt(
       agentId: sessionAgentId,
     });
     prepStages.mark("skills");
+    // [TRACE][节点2.5:Skill系统提示注入]
+    if (skillsPrompt) {
+      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt已注入 长度=${skillsPrompt.length} 内容预览="${skillsPrompt.slice(0, 400)}"`);
+    } else {
+      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt=null（无Skill注入）`);
+    }
 
     const sessionLabel = params.sessionKey ?? params.sessionId;
     const contextInjectionMode = resolveContextInjectionMode(params.config);
@@ -780,6 +786,7 @@ export async function runEmbeddedAttempt(
         ...(err ? { errorCategory: diagnosticErrorCategory(err) } : {}),
       });
     };
+    // 步骤6：创建 Agent 可用工具集（Tool Calling/函数调用），包含 coding tools、消息发送、文件操作等
     const toolsRaw =
       params.disableTools || isRawModelRun
         ? []
@@ -878,6 +885,7 @@ export async function runEmbeddedAttempt(
       bootstrapMode,
       sessionFile: params.sessionFile,
       hasCompletedBootstrapTurn,
+      // 步骤4.1：从 Session（会话）文件中读取历史对话记录
       resolveBootstrapContextForRun: async () =>
         await resolveBootstrapContextForRun({
           workspaceDir: resolvedWorkspace,
@@ -1193,6 +1201,7 @@ export async function runEmbeddedAttempt(
         context: promptContributionContext,
       });
 
+    // 步骤4.2：拼接 System Prompt（系统提示词）+ Context（上下文）+ 用户输入
     const builtAppendPrompt =
       resolveSystemPromptOverride({
         config: params.config,
@@ -1424,6 +1433,7 @@ export async function runEmbeddedAttempt(
         sandboxEnabled: !!sandbox?.enabled,
       });
 
+      // 步骤6：添加客户端 Tool（工具），用于解析 LLM 返回的 tool_use/function_call 意图
       // Add client tools (OpenResponses hosted tools) to customTools
       let clientToolCallDetected: { name: string; params: Record<string, unknown> } | null = null;
       const clientToolLoopDetection = resolveToolLoopDetectionConfig({
@@ -1550,6 +1560,8 @@ export async function runEmbeddedAttempt(
         cfg: params.config,
         agentId: sessionAgentId,
       });
+      // [TRACE][节点3.2:执行层-ContextToken预算] 作用：Token 上下文预算和工具结果截断阈值计算完毕，是防止 context overflow 的第一道防线
+      console.log(`[TRACE][节点3.2:执行层-ContextToken预算] runId="${params.runId}" sessionId="${params.sessionId}" contextTokenBudget=${contextTokenBudgetForGuard} toolResultMaxChars=${toolResultMaxCharsForGuard}`);
       const midTurnPrecheckEnabled =
         params.config?.agents?.defaults?.compaction?.midTurnPrecheck?.enabled === true;
       let pendingMidTurnPrecheckRequest: MidTurnPrecheckRequest | null = null;
@@ -2298,6 +2310,8 @@ export async function runEmbeddedAttempt(
             ) {
               timedOutDuringCompaction = true;
             }
+            // [ERROR][节点3.4:执行层-Compaction超时触发] 运行超时定时器触发，强制中止当前 Agent 执行
+            console.log(`[ERROR][节点3.4:执行层-Compaction超时触发] runId="${params.runId}" sessionId="${params.sessionId}" reason="${reason}" timedOutDuringCompaction=${timedOutDuringCompaction} timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
             abortRun(true);
             if (!abortWarnTimer) {
               abortWarnTimer = setTimeout(() => {
@@ -2316,6 +2330,8 @@ export async function runEmbeddedAttempt(
         );
       };
       scheduleAbortTimer(params.timeoutMs, "initial");
+      // [TRACE][节点3.3:执行层-Compaction超时注册] 作用：初始超时定时器已注册，compactionTimeoutMs 为压缩期间的宽限延长时间
+      console.log(`[TRACE][节点3.3:执行层-Compaction超时注册] runId="${params.runId}" sessionId="${params.sessionId}" timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
 
       let messagesSnapshot: AgentMessage[] = [];
       let sessionIdUsed = activeSession.sessionId;
@@ -2872,6 +2888,10 @@ export async function runEmbeddedAttempt(
               messages: btwSnapshotMessages,
               inFlightPrompt: promptSubmission.prompt,
             });
+            // [TRACE][节点三:智能体调度器入口] 首次调用 LLM
+            const _traceN3StartedAt = Date.now();
+            // 步骤6.1：反射执行具体的 Tool（工具）方法 —— LLM 内部多轮 tool calling 循环
+            console.log(`[TRACE][节点4.0:推理层-LLM推理入口] runId=${params.runId} provider=${params.provider} model=${params.modelId} contextMessages=${activeSession.messages.length} tools=${effectiveTools.length} prompt="${promptSubmission.prompt.slice(0, 200)}"`);
             if (promptSubmission.runtimeOnly) {
               await abortable(activeSession.prompt(promptSubmission.prompt));
             } else {
@@ -2906,6 +2926,8 @@ export async function runEmbeddedAttempt(
                 }
               }
             }
+            // [TRACE][节点6.0:推理层-LLM推理出口] LLM 多轮思考结束，退出 prompt()
+            console.log(`[TRACE][节点6.0:推理层-LLM推理出口] runId=${params.runId} totalMessages=${activeSession.messages.length} elapsedMs=${Date.now() - _traceN3StartedAt}`);
           }
         } catch (err) {
           yieldAborted =

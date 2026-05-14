@@ -286,6 +286,8 @@ function normalizeResolvedModel(params: {
   });
 }
 
+// 步骤5.1：构建 API 请求的传输层 —— 解析 Base URL、Headers、API 协议类型
+// 用于后续实际调用 LLM 时构造 HTTP 请求（URL、Headers、Body）
 function resolveProviderTransport(params: {
   provider: string;
   api?: Api | null;
@@ -1022,6 +1024,9 @@ export function resolveModel(
   };
 }
 
+// 步骤5：解析并调用底层 LLM 大语言模型 API
+// 通过 Provider（供应商）+ ModelId（模型ID）查找到对应的 Model 实例
+// 包含模型发现（Models Discovery）、动态模型解析、Auth 认证等
 export async function resolveModelAsync(
   provider: string,
   modelId: string,
@@ -1041,6 +1046,7 @@ export async function resolveModelAsync(
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
 }> {
+  console.log("[OpenClaw-Trace] 步骤5: 即将解析并调用底层 LLM 大语言模型 API | provider:", provider, "modelId:", modelId);
   const normalizedRef = {
     provider,
     model: normalizeStaticProviderModelId(normalizeProviderId(provider), modelId),

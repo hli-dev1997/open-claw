@@ -341,6 +341,9 @@ type RunPreparedReplyParams = {
   abortedLastRun: boolean;
 };
 
+// 步骤2.1：准备并启动 Agent 运行的上下文环境
+// 组装 Prompt Body、System Prompt 片段、技能快照、队列策略等
+// 最终调用 runReplyAgent 进入 Agent 运行时
 export async function runPreparedReply(
   params: RunPreparedReplyParams,
 ): Promise<ReplyPayload | ReplyPayload[] | undefined> {

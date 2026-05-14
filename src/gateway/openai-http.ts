@@ -512,6 +512,8 @@ function resolveIncludeUsageForStreaming(payload: OpenAiChatCompletionRequest): 
   return (streamOptions as { include_usage?: unknown }).include_usage === true;
 }
 
+// 步骤1：接收用户HTTP请求并建立SSE连接的入口（兼容OpenAI Chat Completions协议）
+// 客户端POST /v1/chat/completions 至此，支持 stream=true SSE流式与普通两种模式
 export async function handleOpenAiHttpRequest(
   req: IncomingMessage,
   res: ServerResponse,
@@ -594,6 +596,8 @@ export async function handleOpenAiHttpRequest(
   const runId = `chatcmpl_${randomUUID()}`;
   const deps = createDefaultDeps();
   const abortController = new AbortController();
+  // 步骤2：【Dispatcher调度】构建 Agent（智能体）命令输入，将HTTP请求的提示词
+  // 组装成Agent可以理解的CommandInput格式，准备送入Agent调度器
   const commandInput = buildAgentCommandInput({
     prompt: {
       message: prompt.message,
@@ -648,6 +652,8 @@ export async function handleOpenAiHttpRequest(
     return true;
   }
 
+  // 步骤6：【SSE流式推送】设置SSE响应头，建立与客户端的持久连接
+  // 之后通过writeAssitantChunk向客户端推送逐token的流式回复
   setSseHeaders(res);
 
   let wroteRole = false;
@@ -690,6 +696,8 @@ export async function handleOpenAiHttpRequest(
     maybeFinalize();
   };
 
+  // 步骤6续：【SSE流式推送】订阅Agent事件总线，将LLM流式回复转换成SSE数据帧发送给客户端
+  // onAgentEvent监听整个Agent生命周期中发射的 assistant/lifecycle 事件
   const unsubscribe = onAgentEvent((evt) => {
     if (evt.runId !== runId) {
       return;
@@ -699,6 +707,7 @@ export async function handleOpenAiHttpRequest(
     }
 
     if (evt.stream === "assistant") {
+      // 从Agent事件中提取增量文本，写入SSE data帧
       const content = resolveAssistantStreamDeltaText(evt) ?? "";
       if (!content) {
         return;
@@ -734,6 +743,9 @@ export async function handleOpenAiHttpRequest(
 
   void (async () => {
     try {
+      // 步骤2续：【Dispatcher调度】实际调用 agentCommandFromIngress（入口函数）
+      // 它将一步步解析Session（会话）、Agent（智能体）配置、Model（模型）选择，
+      // 最终交由 runAgentAttempt 执行完整的 Agent 对话周期
       const result = await agentCommandFromIngress(commandInput, defaultRuntime, deps);
 
       if (closed) {

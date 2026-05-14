@@ -84,6 +84,9 @@ function buildInputOptions(options: InputOptionsArg): InputOptionsReturn {
 function nodeBuildConfig(config: UserConfig): UserConfig {
   return {
     ...config,
+    //todo *** 调试用：开启 sourcemap 以便 IDEA/VS Code 能在 .ts 源文件上打断点
+    //todo *** 生产构建时可考虑条件关闭（如 process.env.SOURCEMAP === '1'）以加速构建
+    sourcemap: true,
     env,
     fixedExtension: false,
     platform: "node",
