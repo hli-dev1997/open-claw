@@ -136,6 +136,104 @@ const runOpenClaw = async (deps) => {
 
 
 
+
+## Gateway（网关）详解
+
+### Gateway 是什么？
+
+Gateway 是 OpenClaw 的**核心服务进程**，所有外部通信都经由它。启动 OpenClaw 服务端本质上就是启动 Gateway：
+
+```bash
+node scripts/run-node.mjs gateway --allow-unconfigured
+```
+
+IDEA 调试配置中的 Application parameters 也是 `gateway --allow-unconfigured`，其中：
+- `gateway` — 启动网关模式
+- `--allow-unconfigured` — 允许在未完整配置的情况下启动（开发调试用）
+
+---
+
+### Gateway 启动序列
+
+```
+scripts/run-node.mjs
+  │  检测 dist 是否过期 → 自动重新构建 TypeScript
+  │  运行 runtime-postbuild（插件元数据、SDK alias、官方 channel catalog 等）
+  ▼
+dist/openclaw.mjs  （子进程，真正的业务进程）
+  │
+  ▼
+startGatewayServer()
+  [src/gateway/server.impl.ts]
+  │
+  ├─ runtime.config      解析端口、bind 地址、auth 模式、TLS 配置
+  ├─ plugins.bootstrap   加载所有插件（acpx、deepseek、openai 等）
+  ├─ control-ui.root     定位 Control UI 静态资源（dist/control-ui/）
+  ├─ runtime.state       创建运行时状态（WebSocket 连接池、chat 状态机等）
+  ├─ canvas              启动 Canvas Host（内嵌浏览器画布）
+  ├─ http.listen         绑定 HTTP 端口（默认 18789）
+  └─ channels            启动插件 channel 服务（心跳、自动回复等）
+```
+
+---
+
+### Gateway 对外暴露的接口
+
+| 接口类型 | 路径 | 说明 |
+|----------|------|------|
+| Control UI | `http://127.0.0.1:18789/` | 浏览器对话界面（Lit 组件，Vite 构建） |
+| WebSocket RPC | `ws://127.0.0.1:18789/__openclaw/ws` | 前端所有 RPC 方法（`chat.send` 等）走这里 |
+| OpenAI 兼容 HTTP | `POST /v1/chat/completions` | 兼容 OpenAI SDK 调用（需配置开启） |
+| OpenResponses HTTP | `POST /v1/responses` | OpenResponses 协议（需配置开启） |
+| Embeddings HTTP | `POST /v1/embeddings` | Embeddings 接口 |
+| Plugin HTTP | `/__openclaw/plugins/*` | 各插件自定义 HTTP 路由 |
+| Canvas Host | `http://127.0.0.1:18789/__openclaw__/canvas/` | 内嵌 Canvas 宿主 |
+| Hooks | `/__openclaw/hooks/*` | 生命周期钩子回调端点 |
+| Health | `/__openclaw/health` | 健康检查 |
+
+---
+
+### Web UI 消息与 HTTP API 的调用链区别
+
+这是本次排查中最关键的发现，两条路径**完全独立**：
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ 路径 A：Web UI（Control UI 浏览器对话）                              │
+│                                                                      │
+│  浏览器 → WebSocket  chat.send  RPC                                  │
+│        → dispatchInboundMessage()   [auto-reply/dispatch.ts]         │
+│        → getReplyFromConfig()       [auto-reply/reply/get-reply.ts]  │
+│        → runReplyAgent()            [auto-reply/reply/agent-runner.ts]│
+│        → runAgentTurnWithFallback() ← 调试断点打这里                 │
+│        → runEmbeddedPiAgent()       ← 实际发起 LLM API 请求         │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ 路径 B：HTTP API（OpenAI SDK / curl 直接调用）                       │
+│                                                                      │
+│  POST /v1/chat/completions                                           │
+│        → openai-http.ts handler                                      │
+│        → agentCommandFromIngress()                                   │
+│        → agentCommandInternal()     ← 调试断点打这里                 │
+│        → (ACP 路径) acpManager.runTurn()                             │
+│           或 (embedded 路径) runAgentAttempt()                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+> **结论**：在 `agentCommandInternal` 里加断点，对 Web UI 发的消息**永远不会触发**。Web UI 走的是 auto-reply 管道，与 HTTP API 路径完全分离。
+
+---
+
+### `--allow-unconfigured` 的作用
+
+正常情况下 Gateway 启动时会校验配置完整性（API Key、频道配置等）。`--allow-unconfigured` 绕过这个检查，适用于：
+- 本地开发调试
+- 仅配置了部分 Provider 时也能启动
+- CI/CD 环境测试
+
+---
+
 #### 1.先运行启动
 
 ![image-20260503192138484](https://notes-1307435281.cos.ap-shanghai.myqcloud.com/note/master/202605031921647.png)

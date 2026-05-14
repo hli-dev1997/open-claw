@@ -1428,6 +1428,12 @@ export async function runReplyAgent(params: {
       return finalizeWithFollowup(undefined, queueKey, runFollowupTurn);
     }
 
+    // [TRACE][节点7.0:合成层-最终响应] 输出最终回复文本
+    const _traceFinalTexts = replyPayloads
+      .filter((p) => typeof p.text === "string" && !p.isError)
+      .map((p) => (p.text as string).slice(0, 300));
+    console.log(`[TRACE][节点7.0:合成层-最终响应] payloads=${replyPayloads.length} finalText="${_traceFinalTexts.join(" | ")}"`);
+
     const successfulCronAdds = runResult.successfulCronAdds ?? 0;
     const hasReminderCommitment = replyPayloads.some(
       (payload) =>

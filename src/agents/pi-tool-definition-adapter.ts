@@ -237,6 +237,8 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             });
             if (hookOutcome.blocked) {
               if (hookOutcome.kind === "veto") {
+                // [ERROR][节点5.E1:工具层-veto拦截] before_tool_call hook 拦截了本次工具调用（veto），工具不会执行
+                console.log(`[ERROR][节点5.E1:工具层-veto拦截] tool="${normalizedName}" callId="${toolCallId}" reason="${(hookOutcome.reason ?? "").substring(0, 100)}..."`);
                 return buildBlockedToolResult({
                   reason: hookOutcome.reason,
                   deniedReason: hookOutcome.deniedReason,
@@ -246,7 +248,12 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             }
             executeParams = hookOutcome.params;
           }
+          // [TRACE][节点5.0:工具层-执行前] 准备执行 Tool
+          const _traceToolStartMs = Date.now();
+          console.log(`[TRACE][节点5.0:工具层-执行前] tool="${normalizedName}" callId="${toolCallId}" params=${JSON.stringify(executeParams).slice(0, 500)}`);
           const rawResult = await tool.execute(toolCallId, executeParams, signal, onUpdate);
+          // [TRACE][节点5.1:工具层-执行后] Tool 执行完毕
+          console.log(`[TRACE][节点5.1:工具层-执行后] tool="${normalizedName}" elapsedMs=${Date.now() - _traceToolStartMs} rawResult=${JSON.stringify(rawResult).slice(0, 500)}`);
           const result = normalizeToolExecutionResult({
             toolName: normalizedName,
             result: rawResult,
@@ -273,6 +280,8 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
           if (described.stack && described.stack !== described.message) {
             logDebug(`tools: ${normalizedName} failed stack:\n${described.stack}`);
           }
+          // [ERROR][节点5.E2:工具层-执行异常] 工具执行过程中抛出异常，返回错误结果（不中断 Agent 主流程）
+          console.log(`[ERROR][节点5.E2:工具层-执行异常] tool="${normalizedName}" callId="${toolCallId}" errMsg="${described.message.substring(0, 100)}..." errCode="${(err as any)?.code ?? "none"}" errStatus="${(err as any)?.status ?? "none"}"`);
           const inputPreview = describeToolFailureInputs({
             rawParams: params,
             effectiveParams: executeParams,

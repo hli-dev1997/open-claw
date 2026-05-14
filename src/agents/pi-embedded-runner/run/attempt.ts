@@ -732,6 +732,12 @@ export async function runEmbeddedAttempt(
       agentId: sessionAgentId,
     });
     prepStages.mark("skills");
+    // [TRACE][节点2.5:Skill系统提示注入]
+    if (skillsPrompt) {
+      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt已注入 长度=${skillsPrompt.length} 内容预览="${skillsPrompt.slice(0, 400)}"`);
+    } else {
+      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt=null（无Skill注入）`);
+    }
 
     const sessionLabel = params.sessionKey ?? params.sessionId;
     const contextInjectionMode = resolveContextInjectionMode(params.config);
@@ -1550,6 +1556,8 @@ export async function runEmbeddedAttempt(
         cfg: params.config,
         agentId: sessionAgentId,
       });
+      // [TRACE][节点3.2:执行层-ContextToken预算] 作用：Token 上下文预算和工具结果截断阈值计算完毕，是防止 context overflow 的第一道防线
+      console.log(`[TRACE][节点3.2:执行层-ContextToken预算] runId="${params.runId}" sessionId="${params.sessionId}" contextTokenBudget=${contextTokenBudgetForGuard} toolResultMaxChars=${toolResultMaxCharsForGuard}`);
       const midTurnPrecheckEnabled =
         params.config?.agents?.defaults?.compaction?.midTurnPrecheck?.enabled === true;
       let pendingMidTurnPrecheckRequest: MidTurnPrecheckRequest | null = null;
@@ -2298,6 +2306,8 @@ export async function runEmbeddedAttempt(
             ) {
               timedOutDuringCompaction = true;
             }
+            // [ERROR][节点3.4:执行层-Compaction超时触发] 运行超时定时器触发，强制中止当前 Agent 执行
+            console.log(`[ERROR][节点3.4:执行层-Compaction超时触发] runId="${params.runId}" sessionId="${params.sessionId}" reason="${reason}" timedOutDuringCompaction=${timedOutDuringCompaction} timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
             abortRun(true);
             if (!abortWarnTimer) {
               abortWarnTimer = setTimeout(() => {
@@ -2316,6 +2326,8 @@ export async function runEmbeddedAttempt(
         );
       };
       scheduleAbortTimer(params.timeoutMs, "initial");
+      // [TRACE][节点3.3:执行层-Compaction超时注册] 作用：初始超时定时器已注册，compactionTimeoutMs 为压缩期间的宽限延长时间
+      console.log(`[TRACE][节点3.3:执行层-Compaction超时注册] runId="${params.runId}" sessionId="${params.sessionId}" timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
 
       let messagesSnapshot: AgentMessage[] = [];
       let sessionIdUsed = activeSession.sessionId;
@@ -2872,6 +2884,9 @@ export async function runEmbeddedAttempt(
               messages: btwSnapshotMessages,
               inFlightPrompt: promptSubmission.prompt,
             });
+            // [TRACE][节点三:智能体调度器入口] 首次调用 LLM
+            const _traceN3StartedAt = Date.now();
+            console.log(`[TRACE][节点4.0:推理层-LLM推理入口] runId=${params.runId} provider=${params.provider} model=${params.modelId} contextMessages=${activeSession.messages.length} tools=${effectiveTools.length} prompt="${promptSubmission.prompt.slice(0, 200)}"`);
             if (promptSubmission.runtimeOnly) {
               await abortable(activeSession.prompt(promptSubmission.prompt));
             } else {
@@ -2906,6 +2921,8 @@ export async function runEmbeddedAttempt(
                 }
               }
             }
+            // [TRACE][节点6.0:推理层-LLM推理出口] LLM 多轮思考结束，退出 prompt()
+            console.log(`[TRACE][节点6.0:推理层-LLM推理出口] runId=${params.runId} totalMessages=${activeSession.messages.length} elapsedMs=${Date.now() - _traceN3StartedAt}`);
           }
         } catch (err) {
           yieldAborted =

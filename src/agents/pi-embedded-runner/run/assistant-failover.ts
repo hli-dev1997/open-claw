@@ -77,12 +77,16 @@ export async function handleAssistantFailover(params: {
   maybeBackoffBeforeOverloadFailover: (reason: FailoverReason | null) => Promise<void>;
   advanceAuthProfile: () => Promise<boolean>;
 }): Promise<AssistantFailoverOutcome> {
+  // 作用：LLM 调用失败时的降级决策中枢，统一处理重试/换Profile/升级Fallback/抛出错误
+  const _failoverStartedAt = Date.now();
   let overloadProfileRotations = params.overloadProfileRotations;
   let decision = params.initialDecision;
   const sameModelIdleTimeoutRetry = (): AssistantFailoverOutcome => {
     params.warn(
       `[llm-idle-timeout] ${sanitizeForLog(params.provider)}/${sanitizeForLog(params.modelId)} produced no reply before the idle watchdog; retrying same model`,
     );
+    // [TRACE][节点4.1:推理层-降级-空闲超时重试] LLM 长时间无响应，触发同模型重试
+    console.log(`[TRACE][节点4.1:推理层-降级-空闲超时重试] provider="${params.provider}" model="${params.modelId}" elapsedMs=${Date.now() - _failoverStartedAt}`);
     return {
       action: "retry",
       overloadProfileRotations,
@@ -124,6 +128,8 @@ export async function handleAssistantFailover(params: {
           `overload profile rotation cap reached for ${sanitizeForLog(params.provider)}/${sanitizeForLog(params.modelId)} after ${overloadProfileRotations} rotations; escalating to model fallback`,
         );
         params.logAssistantFailoverDecision("fallback_model", { status });
+        // [ERROR][节点4.3:推理层-降级-Overload升级Fallback] 轮换次数已达上限，升级为模型级 Fallback
+        console.log(`[ERROR][节点4.3:推理层-降级-Overload升级Fallback] provider="${params.provider}" model="${params.modelId}" rotations=${overloadProfileRotations} limit=${params.overloadProfileRotationLimit} status=${status} elapsedMs=${Date.now() - _failoverStartedAt}`);
         return {
           action: "throw",
           overloadProfileRotations,
@@ -143,6 +149,8 @@ export async function handleAssistantFailover(params: {
     }
 
     if (params.failoverReason === "rate_limit") {
+      // [ERROR][节点4.4:推理层-降级-限流] 触发 rate_limit，尝试 Profile 级 Fallback 升级
+      console.log(`[ERROR][节点4.4:推理层-降级-限流] provider="${params.provider}" model="${params.modelId}" failoverReason="${params.failoverReason}" elapsedMs=${Date.now() - _failoverStartedAt}`);
       params.maybeEscalateRateLimitProfileFallback({
         failoverProvider: params.activeErrorContext.provider,
         failoverModel: params.activeErrorContext.model,
@@ -153,6 +161,8 @@ export async function handleAssistantFailover(params: {
     const rotated = await params.advanceAuthProfile();
     if (rotated) {
       params.logAssistantFailoverDecision("rotate_profile");
+      // [TRACE][节点4.2:推理层-降级-Profile轮换] 成功轮换到下一个 Auth Profile，准备重试
+      console.log(`[TRACE][节点4.2:推理层-降级-Profile轮换] provider="${params.provider}" model="${params.modelId}" failoverReason="${params.failoverReason ?? "none"}" overloadRotations=${overloadProfileRotations} elapsedMs=${Date.now() - _failoverStartedAt}`);
       await params.maybeBackoffBeforeOverloadFailover(params.failoverReason);
       return {
         action: "retry",
@@ -243,6 +253,8 @@ export async function handleAssistantFailover(params: {
     }
   }
 
+  // [TRACE][节点4.5:推理层-降级-正常continue] 无需降级，继续正常处理流程
+  console.log(`[TRACE][节点4.5:推理层-降级-正常continue] provider="${params.provider}" model="${params.modelId}" elapsedMs=${Date.now() - _failoverStartedAt}`);
   return {
     action: "continue_normal",
     overloadProfileRotations,

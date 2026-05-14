@@ -1887,6 +1887,8 @@ export const chatHandlers: GatewayRequestHandlers = {
     const stopCommand = isChatStopCommandText(inboundMessage);
     const normalizedAttachments = normalizeRpcAttachmentsToChatAttachments(p.attachments);
     const rawMessage = inboundMessage.trim();
+    // [TRACE][节点1.0:入口层-请求入口] 接收到用户原始 Query
+    console.log(`[TRACE][节点1.0:入口层-请求入口] sessionKey=${p.sessionKey} rawQuery="${rawMessage.slice(0, 300)}"`);
     if (!rawMessage && normalizedAttachments.length === 0) {
       respond(
         false,
