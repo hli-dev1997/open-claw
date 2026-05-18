@@ -1284,7 +1284,7 @@ export function createOpenAICompletionsTransportStreamFn(): StreamFn {
         if (nextParams !== undefined) {
           params = nextParams as typeof params;
         }
-        console.log("[OpenClaw-Trace] 步骤5.2: 正在向 OpenAI API 发起 chat.completions 流式请求 | model:", (params as any)?.model || "unknown");
+        console.log(`[agent] [agent-step-llm-request][LLM请求] OpenAI API request / 正在向 OpenAI API 发起 chat.completions 流式请求 model=${(params as any)?.model || "unknown"}`);
         const responseStream = (await client.chat.completions.create(
           params as never,
           buildOpenAISdkRequestOptions(model, options?.signal),

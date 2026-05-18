@@ -248,12 +248,10 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             }
             executeParams = hookOutcome.params;
           }
-          // [TRACE][节点5.0:工具层-执行前] 准备执行 Tool
           const _traceToolStartMs = Date.now();
-          console.log(`[TRACE][节点5.0:工具层-执行前] tool="${normalizedName}" callId="${toolCallId}" params=${JSON.stringify(executeParams).slice(0, 500)}`);
+          console.log(`[agent] [agent-step11-tool-exec][步骤A11-工具执行] tool executing / 开始执行工具函数（LLM tool_call → 本地函数调用） tool=${normalizedName} callId=${toolCallId} paramsLen=${JSON.stringify(executeParams).length}`);
           const rawResult = await tool.execute(toolCallId, executeParams, signal, onUpdate);
-          // [TRACE][节点5.1:工具层-执行后] Tool 执行完毕
-          console.log(`[TRACE][节点5.1:工具层-执行后] tool="${normalizedName}" elapsedMs=${Date.now() - _traceToolStartMs} rawResult=${JSON.stringify(rawResult).slice(0, 500)}`);
+          console.log(`[agent] [agent-step11-tool-done][步骤A11-工具执行完成] tool done / 工具函数执行完毕 tool=${normalizedName} callId=${toolCallId} elapsedMs=${Date.now() - _traceToolStartMs} resultLen=${JSON.stringify(rawResult).length}`);
           const result = normalizeToolExecutionResult({
             toolName: normalizedName,
             result: rawResult,

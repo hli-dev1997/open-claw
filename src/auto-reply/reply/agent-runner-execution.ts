@@ -1112,8 +1112,7 @@ export async function runAgentTurnWithFallback(params: {
   let _loopIteration = 0;
   while (true) {
     _loopIteration += 1;
-    // [TRACE][节点3.0:执行层-主循环入口] 进入第 N 次执行循环（首次=1，>1 说明触发了 LiveModelSwitch 或 TransientHttp 重试）
-    console.log(`[TRACE][节点3.0:执行层-主循环入口] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" iteration=${_loopIteration} provider="${params.followupRun.run.provider}" model="${params.followupRun.run.model}"`);
+    console.log(`[agent] [agent-step4-loop-entry][步骤A4-主循环入口] agent loop iteration / 进入第 N 次 Agent 执行循环（1=首次，>1=LiveModelSwitch/TransientHttp 重试） runId=${runId} sessionId=${params.followupRun.run.sessionId} iteration=${_loopIteration} provider=${params.followupRun.run.provider} model=${params.followupRun.run.model}`);
     try {
       const normalizeStreamingText = (payload: ReplyPayload): { text?: string; skip: boolean } => {
         let text = payload.text;
@@ -1215,8 +1214,7 @@ export async function runAgentTurnWithFallback(params: {
           return classification;
         },
         run: async (provider, model, runOptions) => {
-          // [TRACE][节点3.1:执行层-模型选定] 模型选定，进入本轮 LLM 执行（含 Fallback 后重试）
-          console.log(`[TRACE][节点3.1:执行层-模型选定] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" provider="${provider}" model="${model}"`);
+          console.log(`[agent] [agent-step5-model-select][步骤A5-模型选定] model selected for run / 模型选定，进入本轮 LLM 执行（含 Fallback 后重试） runId=${runId} sessionId=${params.followupRun.run.sessionId} provider=${provider} model=${model}`);
           // Notify that model selection is complete (including after fallback).
           // This allows responsePrefix template interpolation with the actual model.
           params.opts?.onModelSelected?.({
@@ -1411,7 +1409,6 @@ export async function runAgentTurnWithFallback(params: {
               sessionKey: params.sessionKey,
             });
             try {
-              console.log("🔴 断点测试：runEmbeddedPiAgent 即将被调用，tools=", JSON.stringify((embeddedContext as any).tools?.map?.((t: any) => t?.function?.name ?? t?.name) ?? []));
               const result = await runEmbeddedPiAgent({
                 ...embeddedContext,
                 allowGatewaySubagentBinding: true,
@@ -1812,8 +1809,7 @@ export async function runAgentTurnWithFallback(params: {
       const isSessionCorruption = /function call turn comes immediately after/i.test(message);
       const isRoleOrderingError = /incorrect role information|roles must alternate/i.test(message);
       const isTransientHttp = isTransientHttpError(message);
-      // [TRACE][节点6.E0:推理层-异常分类] 捕获到异常，分类结果如下（各 E 节点据此分支）
-      console.log(`[TRACE][节点6.E0:推理层-异常分类] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" msg="${message.substring(0, 100)}..." isBilling=${isBilling} isContextOverflow=${isContextOverflow} isCompaction=${isCompactionFailure} isSessionCorruption=${isSessionCorruption} isRoleOrder=${isRoleOrderingError} isTransientHttp=${isTransientHttp}`);
+      console.log(`[agent] [agent-step-err-classify][异常分类] error classified / 捕获到异常，分类结果（据此分支到不同降级/重试策略） runId=${runId} sessionId=${params.followupRun.run.sessionId} isBilling=${isBilling} isContextOverflow=${isContextOverflow} isCompaction=${isCompactionFailure} isSessionCorruption=${isSessionCorruption} isTransientHttp=${isTransientHttp} msg="${message.substring(0, 100)}..."`);
 
       if (isReplyOperationRestartAbort(params.replyOperation)) {
         return {
@@ -1942,8 +1938,7 @@ export async function runAgentTurnWithFallback(params: {
 
       if (isTransientHttp && !didRetryTransientHttpError) {
         didRetryTransientHttpError = true;
-        // [TRACE][节点6.E8:推理层-异常-瞬时HTTP重试] 502/521 等瞬时 HTTP 错误，等待后重试全链路
-        console.log(`[TRACE][节点6.E8:推理层-异常-瞬时HTTP重试] runId="${runId}" msg="${message.substring(0, 100)}..." retryDelayMs=${TRANSIENT_HTTP_RETRY_DELAY_MS}`);
+        console.log(`[agent] [agent-step-err-retry][异常重试] transient HTTP retry / 瞬时 HTTP 错误（502/521等），等待后重试全链路 runId=${runId} retryDelayMs=${TRANSIENT_HTTP_RETRY_DELAY_MS} msg="${message.substring(0, 100)}..."`);
         // Retry the full runWithModelFallback() cycle — transient errors
         // (502/521/etc.) typically affect the whole provider, so falling
         // back to an alternate model first would not help. Instead we wait

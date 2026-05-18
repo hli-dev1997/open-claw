@@ -1046,7 +1046,7 @@ export async function resolveModelAsync(
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
 }> {
-  console.log("[OpenClaw-Trace] 步骤5: 即将解析并调用底层 LLM 大语言模型 API | provider:", provider, "modelId:", modelId);
+  console.log(`[agent] [agent-step-model-resolve][模型解析] resolve LLM model / 解析并调用底层 LLM 大语言模型 API（动态模型发现+Auth 认证） provider=${provider} model=${modelId}`);
   const normalizedRef = {
     provider,
     model: normalizeStaticProviderModelId(normalizeProviderId(provider), modelId),

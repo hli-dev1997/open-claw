@@ -249,11 +249,10 @@ export async function handleInlineActions(params: {
           skillCommands,
         })
       : null;
-  // [TRACE][节点2.0:路由层-技能路由] 打印 Skill 匹配结果
   if (skillInvocation) {
-    console.log(`[TRACE][节点2.0:路由层-技能路由] 匹配到 Skill: name=${skillInvocation.command.name} skillName=${skillInvocation.command.skillName} args="${(skillInvocation.args ?? "").slice(0, 200)}"`);
+    console.log(`[agent] [agent-step1-skill-route][步骤A1-技能路由匹配] skill matched / 命中 Skill 路由（将交给 Skill 执行器处理） skillName=${skillInvocation.command.skillName} args="${(skillInvocation.args ?? "").slice(0, 200)}"`);
   } else {
-    console.log(`[TRACE][节点2.0:路由层-技能路由] 无 Skill 匹配，直通 LLM。命令体="${(command.commandBodyNormalized ?? "").slice(0, 200)}" 可用Skills数=${skillCommands.length}`);
+    console.log(`[agent] [agent-step1-skill-route][步骤A1-技能路由无匹配] no skill matched / 无 Skill 匹配，直通 LLM 推理（普通对话模式） bodyPreview="${(command.commandBodyNormalized ?? "").slice(0, 200)}" availableSkills=${skillCommands.length}`);
   }
   if (skillInvocation) {
     if (!command.isAuthorizedSender) {

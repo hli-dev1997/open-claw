@@ -801,7 +801,7 @@ function wrapStreamTrimToolCallNames(
         const toolBlock = content.find(b => b && typeof b === 'object' && isToolCallBlockType((b as { type?: unknown }).type));
         if (toolBlock) {
           const tb = toolBlock as { name?: string; id?: string };
-          console.log("[OpenClaw-Trace] 步骤6: 当前 LLM 流式响应结束，检测到 ToolCall（仅首次） | toolName:", tb.name ?? 'unknown', "toolCallId:", tb.id ?? 'unknown');
+          console.log(`[agent] [agent-step-toolcall-detect][ToolCall检测] tool call detected / LLM 流式响应结束，检测到 ToolCall 请求 toolName=${tb.name ?? 'unknown'} toolCallId=${tb.id ?? 'unknown'}`);
         }
       }
     }

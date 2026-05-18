@@ -477,7 +477,7 @@ async function agentCommandInternal(
     }
 
     if (!isRawModelRun && acpResolution?.kind === "ready" && sessionKey) {
-      console.log("🔴 断点测试：!isRawModelRun && acpResolution?.kind 被调用了");
+      //console.log("🔴 断点测试：!isRawModelRun && acpResolution?.kind 被调用了");
       const attemptExecutionRuntime = await loadAttemptExecutionRuntime();
       const startedAt = Date.now();
       registerAgentRunContext(runId, {
@@ -1230,7 +1230,7 @@ export async function agentCommand(
   runtime: RuntimeEnv = defaultRuntime,
   deps?: CliDeps,
 ) {
-  console.log("[OpenClaw-Trace] 步骤3: Agent 调度器入口被调用 | sessionKey:", opts.sessionKey, "provider:", opts.provider, "model:", opts.model);
+  console.log(`[agent] [agent-step-scheduler][Agent调度器入口] agent command entry / Agent 调度器入口被调用 sessionKey=${opts.sessionKey} provider=${opts.provider} model=${opts.model}`);
   return await agentCommandInternal(
     {
       ...opts,

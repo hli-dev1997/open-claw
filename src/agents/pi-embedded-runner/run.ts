@@ -305,7 +305,7 @@ function buildHandledReplyPayloads(reply?: ReplyPayload) {
 export async function runEmbeddedPiAgent(
   params: RunEmbeddedPiAgentParams,
 ): Promise<EmbeddedPiRunResult> {
-  console.log("[OpenClaw-Trace] 步骤4: 进入嵌入式 Agent 主运行循环 (runEmbeddedPiAgent) | sessionId:", params.sessionId, "provider:", params.provider, "model:", params.model);
+  console.log(`[agent] [agent-step-embedded-entry][Agent嵌入式入口] embedded agent entry / 进入嵌入式 Agent 主运行循环 runEmbeddedPiAgent runId=${params.runId} sessionId=${params.sessionId} sessionKey=${params.sessionKey ?? "none"} provider=${params.provider} model=${params.model}`);
   // Resolve sessionKey early so all downstream consumers (hooks, LCM, compaction)
   // receive a non-null key even when callers omit it. See #60552.
   const effectiveSessionKey = backfillSessionKey({
@@ -370,7 +370,7 @@ export async function runEmbeddedPiAgent(
           return;
         }
         const message = formatEmbeddedRunStageSummary(
-          `[trace:embedded-run] startup stages: runId=${params.runId} sessionId=${params.sessionId} phase=${phase}`,
+          `[agent] [agent-step7-prep-stages][步骤A7-准备阶段耗时] startup stages / Agent 启动各阶段耗时明细 runId=${params.runId} sessionId=${params.sessionId} phase=${phase}`,
           summary,
         );
         if (shouldWarn) {
@@ -1021,7 +1021,7 @@ export async function runEmbeddedPiAgent(
 
           // 步骤4.1-4.2：进入 attempt 层 —— 从 Session（会话）文件中读取历史对话记录
           // 拼接 System Prompt + Context（上下文）+ 用户输入，构建发送给 LLM 的 Payload
-          console.log("[OpenClaw-Trace] 步骤4.1: 开始构建 LLM 请求 Payload，准备读取历史会话并组装 Context | sessionId:", activeSessionId, "provider:", provider, "model:", modelId);
+          console.log(`[agent] [agent-step9-build-payload][步骤A9-构建LLM请求] build LLM payload / 开始构建 LLM 请求 Payload（读取历史会话+System Prompt+用户输入组装 Context） runId=${params.runId} sessionId=${activeSessionId} provider=${provider} model=${modelId}`);
           const rawAttempt = await runEmbeddedAttemptWithBackend({
             sessionId: activeSessionId,
             sessionKey: resolvedSessionKey,

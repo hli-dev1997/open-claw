@@ -193,6 +193,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     total: 0,
   };
   let compactionCount = 0;
+  let blockReplyFirstLogged = false;
 
   const assistantTexts = state.assistantTexts;
   const toolMetas = state.toolMetas;
@@ -223,7 +224,10 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
               assistantMessageIndex: options.assistantMessageIndex,
             })
           : payload;
-      console.log("[OpenClaw-Trace] 步骤7: 通过 onBlockReply 回调将文本块推送给客户端 | 文本前50字:", (payload?.text || "").slice(0, 50));
+      if (!blockReplyFirstLogged) {
+        blockReplyFirstLogged = true;
+        console.log(`[agent] [agent-step13-stream-push][步骤A13-流式推送开始] streaming text push / 开始通过 onBlockReply 回调将 LLM 流式文本块推送给客户端（后续块不再重复打印）`);
+      }
       const maybeTask = params.onBlockReply(taggedPayload);
       if (!isPromiseLike<void>(maybeTask)) {
         return;
@@ -539,7 +543,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
-      console.log("[OpenClaw-Trace] 步骤6.1: Tool 工具执行结果已返回，通过 onToolResult 推送 | toolName:", toolName, "结果前50字:", (cleanedText || "").slice(0, 50));
+      console.log(`[agent] [agent-step11-tool-result][步骤A11-工具结果推送] tool result pushed / Tool 工具执行结果通过 onToolResult 推送给客户端 tool=${toolName} resultChars=${(cleanedText || "").length}`);
       void params.onToolResult({
         text: cleanedText,
         mediaUrls: filteredMediaUrls.length ? filteredMediaUrls : undefined,

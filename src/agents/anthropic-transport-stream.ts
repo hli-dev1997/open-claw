@@ -611,7 +611,7 @@ function createAnthropicMessagesClient(params: {
           },
           params.defaultHeaders,
         );
-        console.log("[OpenClaw-Trace] 步骤5.1: 正在向 Anthropic API 发起 LLM 请求 | url:", url, "model:", (body?.model || "unknown"));
+        console.log(`[agent] [agent-step-llm-request][LLM请求] Anthropic API request / 正在向 Anthropic API 发起流式聊天请求 model=${body?.model || "unknown"}`);
         const response = await params.fetch(url, {
           method: "POST",
           headers,

@@ -1036,8 +1036,7 @@ export async function compactEmbeddedPiSessionDirect(
           }
 
           const compactStartedAt = Date.now();
-          // [TRACE][节点C1:压缩层-Compaction开始] 上下文压缩正式启动，记录压缩前快照信息
-          console.log(`[TRACE][节点C1:压缩层-Compaction开始] runId="${runId}" sessionId="${params.sessionId}" sessionKey="${params.sessionKey ?? "none"}" trigger="${trigger}" provider="${provider}/${modelId}" attempt=${attempt}/${maxAttempts} messageCount=${session.messages.length} estTokens=${preMetrics?.estTokens ?? "unknown"}`);
+          console.log(`[agent] [agent-step-c1-compact-start][Compaction开始] compaction started / 上下文压缩正式启动（减少历史消息以控制 Token 用量） runId=${runId} sessionId=${params.sessionId} sessionKey=${params.sessionKey ?? "none"} trigger=${trigger} provider=${provider}/${modelId} attempt=${attempt}/${maxAttempts} messageCount=${session.messages.length} estTokens=${preMetrics?.estTokens ?? "unknown"}`);
           // Measure compactedCount from the original pre-limiting transcript so compaction
           // lifecycle metrics represent total reduction through the compaction pipeline.
           const messageCountCompactionInput = messageCountOriginal;
@@ -1188,8 +1187,7 @@ export async function compactEmbeddedPiSessionDirect(
             tokensBefore: result.tokensBefore,
             firstKeptEntryId: effectiveFirstKeptEntryId,
           });
-          // [TRACE][节点C2:压缩层-Compaction完成] 上下文压缩成功，记录压缩后指标
-          console.log(`[TRACE][节点C2:压缩层-Compaction完成] runId="${runId}" sessionId="${params.sessionId}" tokensBefore=${observedTokenCount ?? result.tokensBefore ?? "unknown"} tokensAfter=${tokensAfter ?? "unknown"} compactedCount=${compactedCount} messageCountAfter=${session.messages.length} elapsedMs=${Date.now() - compactStartedAt}`);
+          console.log(`[agent] [agent-step-c2-compact-done][Compaction完成] compaction complete / 上下文压缩完成 runId=${runId} sessionId=${params.sessionId} tokensBefore=${observedTokenCount ?? result.tokensBefore ?? "unknown"} tokensAfter=${tokensAfter ?? "unknown"} compactedCount=${compactedCount} messageCountAfter=${session.messages.length} elapsedMs=${Date.now() - compactStartedAt}`);
           return {
             ok: true,
             compacted: true,

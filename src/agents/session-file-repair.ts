@@ -321,7 +321,7 @@ export async function repairSessionFileIfNeeded(params: {
     };
   }
 
-  params.warn?.(
+  params.info?.(
     `session file repaired: ${buildRepairSummaryParts({
       droppedLines,
       rewrittenAssistantMessages,

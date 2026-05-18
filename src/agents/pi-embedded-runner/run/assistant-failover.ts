@@ -85,8 +85,7 @@ export async function handleAssistantFailover(params: {
     params.warn(
       `[llm-idle-timeout] ${sanitizeForLog(params.provider)}/${sanitizeForLog(params.modelId)} produced no reply before the idle watchdog; retrying same model`,
     );
-    // [TRACE][节点4.1:推理层-降级-空闲超时重试] LLM 长时间无响应，触发同模型重试
-    console.log(`[TRACE][节点4.1:推理层-降级-空闲超时重试] provider="${params.provider}" model="${params.modelId}" elapsedMs=${Date.now() - _failoverStartedAt}`);
+    console.log(`[agent] [agent-step12-failover-retry][步骤A12-降级重试] idle timeout retry / LLM 长时间无响应，触发同模型重试 provider=${params.provider} model=${params.modelId} elapsedMs=${Date.now() - _failoverStartedAt}`);
     return {
       action: "retry",
       overloadProfileRotations,
@@ -161,8 +160,7 @@ export async function handleAssistantFailover(params: {
     const rotated = await params.advanceAuthProfile();
     if (rotated) {
       params.logAssistantFailoverDecision("rotate_profile");
-      // [TRACE][节点4.2:推理层-降级-Profile轮换] 成功轮换到下一个 Auth Profile，准备重试
-      console.log(`[TRACE][节点4.2:推理层-降级-Profile轮换] provider="${params.provider}" model="${params.modelId}" failoverReason="${params.failoverReason ?? "none"}" overloadRotations=${overloadProfileRotations} elapsedMs=${Date.now() - _failoverStartedAt}`);
+      console.log(`[agent] [agent-step12-failover-profile][步骤A12-降级Profile轮换] auth profile rotated / 成功轮换到下一个 Auth Profile，准备重试 provider=${params.provider} model=${params.modelId} failoverReason=${params.failoverReason ?? "none"} overloadRotations=${overloadProfileRotations} elapsedMs=${Date.now() - _failoverStartedAt}`);
       await params.maybeBackoffBeforeOverloadFailover(params.failoverReason);
       return {
         action: "retry",
@@ -253,8 +251,7 @@ export async function handleAssistantFailover(params: {
     }
   }
 
-  // [TRACE][节点4.5:推理层-降级-正常continue] 无需降级，继续正常处理流程
-  console.log(`[TRACE][节点4.5:推理层-降级-正常continue] provider="${params.provider}" model="${params.modelId}" elapsedMs=${Date.now() - _failoverStartedAt}`);
+  console.log(`[agent] [agent-step12-failover-ok][步骤A12-降级检查通过] no failover needed / 降级检查通过，无需切换模型/Auth Profile，正常流程继续 provider=${params.provider} model=${params.modelId} elapsedMs=${Date.now() - _failoverStartedAt}`);
   return {
     action: "continue_normal",
     overloadProfileRotations,
