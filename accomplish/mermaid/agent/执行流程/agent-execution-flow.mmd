@@ -1,0 +1,70 @@
+flowchart TD
+    subgraph "步骤 A9: 组装 LLM 命令"
+        A1["resolveSkillsPromptForRun()<br/>attempt.ts:727<br/>注入 Skills 到 System Prompt"]
+        A2["resolveBootstrapContextForRun()<br/>attempt.ts:888<br/>读取历史会话上下文"]
+        A3["buildEmbeddedSystemPrompt()<br/>attempt.ts:1209<br/>拼接完整 System Prompt<br/>(workspace + tools + skills + runtime)"]
+        A4["createOpenClawCodingTools()<br/>attempt.ts:793<br/>创建 Agent 工具集<br/>(核心工具 + 捆绑工具 + MCP 工具)"]
+        A5["createEmbeddedAgentSession()<br/>attempt.ts:1501<br/>创建 Agent Session"]
+        A6["多层包装 streamFn<br/>attempt.ts:1739-1969<br/>基础流函数 → Provider 流函数<br/>→ cache trace → thinking 裁剪<br/>→ tool call ID 修复 → 文本转换"]
+        A7["assembleAttemptContextEngine()<br/>attempt.ts:2092<br/>Token 预算窗口管理<br/>contextEngine.compact()"]
+    end
+
+    subgraph "步骤 A10: LLM 推理入口"
+        B1["activeSession.prompt()<br/>attempt.ts:2891<br/>调用 LLM"]
+        B2["@mariozechner/pi-agent-core<br/>Agent.prompt() 内部循环"]
+        B3["streamFn 发送流式请求<br/>到 LLM Provider<br/>anthropic-transport-stream.ts:614<br/>openai-transport-stream.ts:1287"]
+    end
+
+    subgraph "流式事件处理 (subscribe 订阅)"
+        C1["subscribeEmbeddedPiSession()<br/>pi-embedded-subscribe.ts:119<br/>订阅 Agent 事件流"]
+        C2["handleMessageStart()<br/>handlers.messages.ts:380<br/>消息开始"]
+        C3["handleMessageUpdate()<br/>handlers.messages.ts:399<br/>处理 text_delta / thinking_delta<br/>→ emitBlockReply() 推送给客户端"]
+        C4["handleMessageEnd()<br/>handlers.messages.ts:654<br/>消息结束"]
+    end
+
+    subgraph "步骤 A11: Tool Call 处理循环"
+        D1{"LLM 返回<br/>tool_use?"}
+        D2["handleToolExecutionStart()<br/>handlers.tools.ts:582<br/>工具开始执行"]
+        D3["pi-tool-definition-adapter.ts:252<br/>实际执行工具<br/>(文件读写/搜索/Shell 等)"]
+        D4["handleToolExecutionUpdate()<br/>handlers.tools.ts:727<br/>工具执行进度"]
+        D5["handleToolExecutionEnd()<br/>handlers.tools.ts:805<br/>工具执行完成<br/>→ emitToolResultOutput()<br/>→ onToolResult 推送结果"]
+        D6["将 Tool Result 追加到<br/>conversation 上下文"]
+        D7["再次调用 LLM<br/>(回到步骤 A10)"]
+    end
+
+    subgraph "Agent 结束"
+        E1["handleAgentEnd()<br/>handlers.lifecycle.ts:39<br/>Agent 生命周期结束"]
+        E2["无 tool call → 循环结束<br/>返回最终响应"]
+    end
+
+    subgraph "步骤 A12: 错误处理 & 重试 (run.ts while 循环)"
+        F1{"检查 prompt<br/>执行结果"}
+        F2["Timeout 触发<br/>compaction 重试<br/>run.ts:1256"]
+        F3["Context Overflow<br/>检测 & 恢复<br/>run.ts:1362"]
+        F4["Auth Profile 轮换<br/>assistant-failover.ts:163"]
+        F5["Live Model 切换<br/>run.ts:1231"]
+        F6["Planning-only /<br/>Reasoning-only 重试<br/>run.ts:2189"]
+        F7["handleAssistantFailover()<br/>assistant-failover.ts:88<br/>Idle timeout / 降级重试"]
+        F8["buildEmbeddedRunPayloads()<br/>run.ts:2051<br/>构建返回 Payload"]
+        F9["返回 EmbeddedPiRunResult<br/>(payloads + meta)"]
+    end
+
+    A1 --> A2 --> A3 --> A4 --> A5 --> A6 --> A7
+    A7 --> B1 --> B2 --> B3
+    B3 --> C1 --> C2 --> C3 --> C4
+    C4 --> D1
+    D1 -->|"是"| D2 --> D3 --> D4 --> D5 --> D6 --> D7 --> B1
+    D1 -->|"否"| E2 --> E1
+    E1 --> F1
+    F1 -->|"成功"| F8 --> F9
+    F1 -->|"失败"| F2
+    F1 -->|"失败"| F3
+    F1 -->|"失败"| F7
+    F2 --> F6
+    F3 --> F6
+    F7 -->|"需要重试"| A7
+    F7 -->|"无需降级"| F6
+    F6 -->|"继续重试"| A7
+    F6 -->|"放弃重试"| F8
+    F4 --> A7
+    F5 --> A7
