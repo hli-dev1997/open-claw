@@ -25,6 +25,7 @@ import {
   freezeDiagnosticTraceContext,
 } from "../../infra/diagnostic-trace-context.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
+import { formatNodeLog } from "../../logging/node-log.js";
 import { CommandLaneClearedError, GatewayDrainingError } from "../../process/command-queue.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import {
@@ -1431,7 +1432,30 @@ export async function runReplyAgent(params: {
     const finalTextLen = replyPayloads
       .filter((p) => typeof p.text === "string" && !p.isError)
       .reduce((sum, p) => sum + (p.text as string).length, 0);
-    console.log(`[agent] [agent-step15-final-reply][步骤A15-最终响应合成] final reply assembled / 最终回复文本组装完成（payload 合并/去重/排序后输出） payloads=${replyPayloads.length} finalTextChars=${finalTextLen}`);
+    console.log(
+      formatNodeLog({
+        id: "agent.reply.final",
+        name: "合成最终回复",
+        summary: "合并、去重、过滤 NO_REPLY，并生成最终 payload",
+        fields: {
+          runId,
+          payloads: replyPayloads.length,
+          finalChars: finalTextLen,
+        },
+      }),
+    );
+    console.log(
+      formatNodeLog({
+        id: "reply.final",
+        name: "最终回复摘要",
+        summary: "最终 payload 准备进入投递管线",
+        fields: {
+          runId,
+          payloads: replyPayloads.length,
+          finalChars: finalTextLen,
+        },
+      }),
+    );
 
     const successfulCronAdds = runResult.successfulCronAdds ?? 0;
     const hasReminderCommitment = replyPayloads.some(

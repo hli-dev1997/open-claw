@@ -52,6 +52,7 @@ import {
   loadVoiceWakeRoutingConfig,
   resolveVoiceWakeRouteByTrigger,
 } from "../../infra/voicewake-routing.js";
+import { formatNodeLog } from "../../logging/node-log.js";
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import {
   classifySessionKeyShape,
@@ -1512,6 +1513,29 @@ export const agentHandlers: GatewayRequestHandlers = {
       ignoreAgentTerminalSnapshot: hasActiveChatRun,
     });
     if (cachedGatewaySnapshot) {
+      console.log(
+        formatNodeLog({
+          id: "agent.wait.start",
+          name: "开始等待运行结束",
+          summary: "agent.wait 等待 lifecycle end/error",
+          fields: {
+            runId,
+            timeoutMs,
+          },
+        }),
+      );
+      console.log(
+        formatNodeLog({
+          id: "agent.wait.done",
+          name: "等待结束",
+          summary: "返回 ok/timeout/error",
+          fields: {
+            runId,
+            status: cachedGatewaySnapshot.status,
+            source: "gateway_dedupe",
+          },
+        }),
+      );
       respond(true, {
         runId,
         status: cachedGatewaySnapshot.status,

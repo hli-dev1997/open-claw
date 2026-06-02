@@ -62,6 +62,7 @@ function createAttemptParams(config?: OpenClawConfig): EmbeddedRunAttemptParams 
 
 function createAttemptResult(sessionIdUsed: string): EmbeddedRunAttemptResult {
   return {
+    modelCalls: 0,
     aborted: false,
     externalAbort: false,
     timedOut: false,

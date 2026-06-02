@@ -43,6 +43,9 @@ function createTestContext(): {
       toolMetaById: new Map<string, ToolCallSummary>(),
       toolMetas: [],
       toolSummaryById: new Set<string>(),
+      pendingToolBatchCallIds: new Set<string>(),
+      toolBatchHadError: false,
+      toolFailureCount: 0,
       itemActiveIds: new Set<string>(),
       itemStartedCount: 0,
       itemCompletedCount: 0,
@@ -192,6 +195,80 @@ describe("handleToolExecutionEnd cron.add commitment tracking", () => {
     expect(ctx.state.successfulCronAdds).toBe(0);
     expect(ctx.state.itemCompletedCount).toBe(1);
     expect(ctx.state.itemActiveIds.size).toBe(0);
+  });
+
+  it("emits result summaries and completes a parallel batch only after its final tool result", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { ctx } = createTestContext();
+    ctx.state.pendingToolBatchCallIds = new Set(["tool-a", "tool-b"]);
+    await handleToolExecutionStart(
+      ctx as never,
+      { type: "tool_execution_start", toolName: "read", toolCallId: "tool-a", args: {} } as never,
+    );
+    await handleToolExecutionStart(
+      ctx as never,
+      { type: "tool_execution_start", toolName: "read", toolCallId: "tool-b", args: {} } as never,
+    );
+
+    await handleToolExecutionEnd(
+      ctx as never,
+      {
+        type: "tool_execution_end",
+        toolName: "read",
+        toolCallId: "tool-a",
+        isError: true,
+        result: { content: [{ type: "text", text: "alpha" }] },
+      } as never,
+    );
+    expect(consoleLog.mock.calls.map((call) => String(call[0])).join("\n")).not.toContain(
+      "[tool.batch.done]",
+    );
+
+    await handleToolExecutionEnd(
+      ctx as never,
+      {
+        type: "tool_execution_end",
+        toolName: "read",
+        toolCallId: "tool-b",
+        isError: false,
+        result: { content: [{ type: "text", text: "beta" }] },
+      } as never,
+    );
+
+    const logs = consoleLog.mock.calls.map((call) => String(call[0]));
+    expect(logs.filter((line) => line.includes("[tool.result.summary]"))).toHaveLength(2);
+    expect(logs.filter((line) => line.includes("[tool.batch.done]"))).toHaveLength(1);
+    expect(logs.find((line) => line.includes("[tool.batch.done]"))).toContain("hasError=true");
+    expect(ctx.state.toolFailureCount).toBe(1);
+  });
+
+  it("includes exec status in the result summary without inventing a tool error", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { ctx } = createTestContext();
+
+    await handleToolExecutionEnd(
+      ctx as never,
+      {
+        type: "tool_execution_end",
+        toolName: "exec",
+        toolCallId: "tool-exec-1",
+        isError: false,
+        result: {
+          content: [{ type: "text", text: "command printed an error-looking message" }],
+          details: {
+            status: "completed",
+            exitCode: 0,
+            durationMs: 2,
+            aggregated: "command printed an error-looking message",
+          },
+        },
+      } as never,
+    );
+
+    const log = consoleLog.mock.calls.map((call) => String(call[0])).join("\n");
+    expect(log).toContain("[tool.result.summary] 工具结果摘要");
+    expect(log).toContain('isError=false execStatus="completed" exitCode=0');
+    expect(ctx.state.toolFailureCount).toBe(0);
   });
 });
 

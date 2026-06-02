@@ -409,7 +409,10 @@ export async function dispatchReplyFromConfig(
     typeof ctx.Timestamp === "number" && Number.isFinite(ctx.Timestamp) ? ctx.Timestamp : undefined;
   const messageIdForHook =
     ctx.MessageSidFull ?? ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
-  const hookContext = deriveInboundMessageHookContext(ctx, { messageId: messageIdForHook });
+  const hookContext = {
+    ...deriveInboundMessageHookContext(ctx, { messageId: messageIdForHook }),
+    runId: params.replyOptions?.runId,
+  };
   const { isGroup, groupId } = hookContext;
   const inboundClaimContext = toPluginInboundClaimContext(hookContext);
   const inboundClaimEvent = toPluginInboundClaimEvent(hookContext, {
@@ -913,6 +916,7 @@ export async function dispatchReplyFromConfig(
           timestamp: hookContext.timestamp,
         },
         {
+          runId: params.replyOptions?.runId,
           channelId: hookContext.channelId,
           accountId: hookContext.accountId,
           conversationId: inboundClaimContext.conversationId,
@@ -958,6 +962,8 @@ export async function dispatchReplyFromConfig(
           sendPolicy,
         },
         {
+          runId: params.replyOptions?.runId,
+          sessionKey: acpDispatchSessionKey,
           cfg,
           dispatcher,
           abortSignal: params.replyOptions?.abortSignal,
@@ -1375,6 +1381,8 @@ export async function dispatchReplyFromConfig(
             isTailDispatch: true,
           },
           {
+            runId: params.replyOptions?.runId,
+            sessionKey: acpDispatchSessionKey,
             cfg,
             dispatcher,
             abortSignal: params.replyOptions?.abortSignal,

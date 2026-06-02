@@ -407,6 +407,7 @@ export async function handleFeishuMessage(params: {
 
   const log = runtime?.log ?? console.log;
   const error = runtime?.error ?? console.error;
+  const runtimeEnv = (runtime ?? { log, error }) as RuntimeEnv;
 
   const messageId = event.message.message_id;
   if (
@@ -1308,7 +1309,7 @@ export async function handleFeishuMessage(params: {
           const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
             cfg,
             agentId,
-            runtime: runtime as RuntimeEnv,
+            runtime: runtimeEnv,
             chatId: ctx.chatId,
             allowReasoningPreview,
             replyToMessageId: replyTargetMessageId,
@@ -1473,7 +1474,7 @@ export async function handleFeishuMessage(params: {
       const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
         cfg,
         agentId: route.agentId,
-        runtime: runtime as RuntimeEnv,
+        runtime: runtimeEnv,
         chatId: ctx.chatId,
         allowReasoningPreview,
         replyToMessageId: replyTargetMessageId,

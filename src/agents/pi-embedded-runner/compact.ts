@@ -20,6 +20,7 @@ import {
 import { formatErrorMessage } from "../../infra/errors.js";
 import { getMachineDisplayName } from "../../infra/machine-name.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
+import { formatNodeLog } from "../../logging/node-log.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import { extractModelCompat } from "../../plugins/provider-model-compat.js";
 import type { ProviderRuntimeModel } from "../../plugins/provider-runtime-model.types.js";
@@ -354,8 +355,20 @@ export async function compactEmbeddedPiSessionDirect(
   let thinkLevel: ThinkLevel = params.thinkLevel ?? "off";
   const attemptedThinking = new Set<ThinkLevel>();
   const fail = (reason: string): EmbeddedPiCompactResult => {
-    // [ERROR][节点C.E:压缩层-Compaction失败] 压缩过程中发生错误，返回失败结果
-    console.log(`[ERROR][节点C.E:压缩层-Compaction失败] runId="${runId}" sessionId="${params.sessionId}" sessionKey="${params.sessionKey ?? "none"}" reason="${reason.substring(0, 100)}..." elapsedMs=${Date.now() - startedAt}`);
+    console.log(
+      formatNodeLog({
+        id: "agent.compaction.error",
+        name: "上下文压缩失败",
+        summary: "压缩过程中发生错误，返回失败结果",
+        fields: {
+          runId,
+          sessionId: params.sessionId,
+          sessionKey: params.sessionKey ?? "none",
+          reason: reason.substring(0, 100),
+          elapsedMs: Date.now() - startedAt,
+        },
+      }),
+    );
     const failureReason = classifyCompactionReason(reason);
     const detail =
       failureReason === "unknown" ? formatUnknownCompactionReasonDetail(reason) : undefined;
@@ -798,6 +811,17 @@ export async function compactEmbeddedPiSessionDirect(
     };
 
     const compactionTimeoutMs = resolveCompactionTimeoutMs(params.config);
+    console.log(
+      formatNodeLog({
+        id: "session.lock.acquire",
+        name: "获取会话写锁",
+        summary: "准备读写 session transcript",
+        fields: {
+          runId,
+          sessionId: params.sessionId,
+        },
+      }),
+    );
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
       maxHoldMs: resolveSessionLockMaxHoldFromTimeout({
@@ -1036,7 +1060,23 @@ export async function compactEmbeddedPiSessionDirect(
           }
 
           const compactStartedAt = Date.now();
-          console.log(`[agent] [agent-step-c1-compact-start][Compaction开始] compaction started / 上下文压缩正式启动（减少历史消息以控制 Token 用量） runId=${runId} sessionId=${params.sessionId} sessionKey=${params.sessionKey ?? "none"} trigger=${trigger} provider=${provider}/${modelId} attempt=${attempt}/${maxAttempts} messageCount=${session.messages.length} estTokens=${preMetrics?.estTokens ?? "unknown"}`);
+          console.log(
+            formatNodeLog({
+              id: "agent.compaction.start",
+              name: "上下文压缩开始",
+              summary: "上下文压缩正式启动，减少历史消息以控制 Token 用量",
+              fields: {
+                runId,
+                sessionId: params.sessionId,
+                sessionKey: params.sessionKey ?? "none",
+                trigger,
+                model: `${provider}/${modelId}`,
+                attempt: `${attempt}/${maxAttempts}`,
+                messageCount: session.messages.length,
+                estTokens: preMetrics?.estTokens ?? "unknown",
+              },
+            }),
+          );
           // Measure compactedCount from the original pre-limiting transcript so compaction
           // lifecycle metrics represent total reduction through the compaction pipeline.
           const messageCountCompactionInput = messageCountOriginal;
@@ -1187,7 +1227,22 @@ export async function compactEmbeddedPiSessionDirect(
             tokensBefore: result.tokensBefore,
             firstKeptEntryId: effectiveFirstKeptEntryId,
           });
-          console.log(`[agent] [agent-step-c2-compact-done][Compaction完成] compaction complete / 上下文压缩完成 runId=${runId} sessionId=${params.sessionId} tokensBefore=${observedTokenCount ?? result.tokensBefore ?? "unknown"} tokensAfter=${tokensAfter ?? "unknown"} compactedCount=${compactedCount} messageCountAfter=${session.messages.length} elapsedMs=${Date.now() - compactStartedAt}`);
+          console.log(
+            formatNodeLog({
+              id: "agent.compaction.done",
+              name: "上下文压缩完成",
+              summary: "上下文压缩完成",
+              fields: {
+                runId,
+                sessionId: params.sessionId,
+                tokensBefore: observedTokenCount ?? result.tokensBefore ?? "unknown",
+                tokensAfter: tokensAfter ?? "unknown",
+                compactedCount,
+                messageCountAfter: session.messages.length,
+                elapsedMs: Date.now() - compactStartedAt,
+              },
+            }),
+          );
           return {
             ok: true,
             compacted: true,
@@ -1246,6 +1301,17 @@ export async function compactEmbeddedPiSessionDirect(
         /* best-effort */
       }
       await sessionLock.release();
+      console.log(
+        formatNodeLog({
+          id: "session.lock.release",
+          name: "释放会话写锁",
+          summary: "session transcript 写入完成",
+          fields: {
+            runId,
+            sessionId: params.sessionId,
+          },
+        }),
+      );
     }
   } catch (err) {
     const reason = resolveCompactionFailureReason({

@@ -41,6 +41,7 @@ function createDiagnosticTrace() {
 
 function createAttemptResult(): EmbeddedRunAttemptResult {
   return {
+    modelCalls: 0,
     aborted: false,
     externalAbort: false,
     timedOut: false,

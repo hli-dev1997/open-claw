@@ -1442,7 +1442,6 @@ export function createExecTool(
     },
     parameters: execSchema,
     execute: async (_toolCallId, args, signal, onUpdate) => {
-      console.log(`[agent] [agent-step11-tool-exec][步骤A11-Exec工具] bash exec tool / 执行本地 bash 命令 toolCallId=${_toolCallId} commandChars=${((args as any)?.command || "").length}`);
       const params = args as {
         command: string;
         workdir?: string;

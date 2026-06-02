@@ -81,12 +81,13 @@ describe("getReplyFromConfig before_agent_reply wiring", () => {
       reply: { text: "plugin reply" },
     });
 
-    const result = await getReplyFromConfig(buildGetReplyGroupCtx(), undefined, {});
+    const result = await getReplyFromConfig(buildGetReplyGroupCtx(), { runId: "run-hook" }, {});
 
     expect(result).toEqual({ text: "plugin reply" });
     expect(mocks.runBeforeAgentReply).toHaveBeenCalledWith(
       { cleanedBody: "hello world" },
       expect.objectContaining({
+        runId: "run-hook",
         agentId: "main",
         sessionKey: "agent:main:telegram:-100123",
         sessionId: "session-1",

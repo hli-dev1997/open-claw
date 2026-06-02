@@ -46,6 +46,8 @@ export type EmbeddedRunAttemptParams = EmbeddedRunAttemptBase & {
 };
 
 export type EmbeddedRunAttemptResult = {
+  /** Number of outbound model requests made during this attempt, including tool continuations. */
+  modelCalls: number;
   aborted: boolean;
   /** True when the abort originated from the caller-provided abortSignal. */
   externalAbort: boolean;
@@ -89,6 +91,8 @@ export type EmbeddedRunAttemptResult = {
   messagesSnapshot: AgentMessage[];
   assistantTexts: string[];
   toolMetas: Array<{ toolName: string; meta?: string }>;
+  /** Number of tool executions that ended as errors during this attempt. */
+  toolFailureCount?: number;
   lastAssistant: AssistantMessage | undefined;
   currentAttemptAssistant?: AssistantMessage | undefined;
   lastToolError?: ToolErrorSummary;

@@ -1,4 +1,5 @@
 import { onAgentEvent } from "../../infra/agent-events.js";
+import { formatNodeLog } from "../../logging/node-log.js";
 import { setSafeTimeout } from "../../utils/timer-delay.js";
 
 const AGENT_RUN_CACHE_TTL_MS = 10 * 60_000;
@@ -166,6 +167,25 @@ function ensureAgentRunListener() {
       return;
     }
     const phase = evt.data?.phase;
+    console.log(
+      formatNodeLog({
+        id: "lifecycle.emit",
+        name: "发送生命周期事件",
+        summary: "phase=start/end/error",
+        fields: {
+          runId: evt.runId,
+          phase: typeof phase === "string" ? phase : "unknown",
+          status:
+            phase === "error"
+              ? "error"
+              : phase === "end"
+                ? evt.data?.aborted
+                  ? "timeout"
+                  : "ok"
+                : "running",
+        },
+      }),
+    );
     if (phase === "start") {
       const startedAt = typeof evt.data?.startedAt === "number" ? evt.data.startedAt : undefined;
       agentRunStarts.set(evt.runId, startedAt ?? Date.now());
@@ -229,15 +249,50 @@ export async function waitForAgentJob(params: {
 }): Promise<AgentRunSnapshot | null> {
   const { runId, timeoutMs, signal, ignoreCachedSnapshot = false } = params;
   ensureAgentRunListener();
+  console.log(
+    formatNodeLog({
+      id: "agent.wait.start",
+      name: "开始等待运行结束",
+      summary: "agent.wait 等待 lifecycle end/error",
+      fields: {
+        runId,
+        timeoutMs,
+      },
+    }),
+  );
   const cached = ignoreCachedSnapshot ? undefined : getCachedAgentRun(runId);
   if (cached) {
+    console.log(
+      formatNodeLog({
+        id: "agent.wait.done",
+        name: "等待结束",
+        summary: "返回 ok/timeout/error",
+        fields: {
+          runId,
+          status: cached.status,
+          source: "cache",
+        },
+      }),
+    );
     return cached;
   }
   if (timeoutMs <= 0 || signal?.aborted) {
+    console.log(
+      formatNodeLog({
+        id: "agent.wait.done",
+        name: "等待结束",
+        summary: "返回 ok/timeout/error",
+        fields: {
+          runId,
+          status: "timeout",
+          source: signal?.aborted ? "abort" : "timeout",
+        },
+      }),
+    );
     return null;
   }
 
-  return await new Promise((resolve) => {
+  const result = await new Promise<AgentRunSnapshot | null>((resolve) => {
     let settled = false;
     let pendingErrorTimer: NodeJS.Timeout | undefined;
     let pendingTimeoutTimer: NodeJS.Timeout | undefined;
@@ -368,6 +423,18 @@ export async function waitForAgentJob(params: {
     onAbort = () => finish(null);
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+  console.log(
+    formatNodeLog({
+      id: "agent.wait.done",
+      name: "等待结束",
+      summary: "返回 ok/timeout/error",
+      fields: {
+        runId,
+        status: result?.status ?? "timeout",
+      },
+    }),
+  );
+  return result;
 }
 
 ensureAgentRunListener();

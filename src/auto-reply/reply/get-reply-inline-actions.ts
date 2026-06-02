@@ -8,6 +8,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
+import { formatNodeLog, previewLogValue } from "../../logging/node-log.js";
 import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
@@ -250,9 +251,35 @@ export async function handleInlineActions(params: {
         })
       : null;
   if (skillInvocation) {
-    console.log(`[agent] [agent-step1-skill-route][步骤A1-技能路由匹配] skill matched / 命中 Skill 路由（将交给 Skill 执行器处理） skillName=${skillInvocation.command.skillName} args="${(skillInvocation.args ?? "").slice(0, 200)}"`);
+    console.log(
+      formatNodeLog({
+        id: "agent.skill.route",
+        name: "Skill路由",
+        summary: "检查是否命中特定 Skill",
+        fields: {
+          sessionKey,
+          agentId,
+          matched: true,
+          skillName: skillInvocation.command.skillName,
+          argsPreview: previewLogValue(skillInvocation.args ?? "", 120),
+        },
+      }),
+    );
   } else {
-    console.log(`[agent] [agent-step1-skill-route][步骤A1-技能路由无匹配] no skill matched / 无 Skill 匹配，直通 LLM 推理（普通对话模式） bodyPreview="${(command.commandBodyNormalized ?? "").slice(0, 200)}" availableSkills=${skillCommands.length}`);
+    console.log(
+      formatNodeLog({
+        id: "agent.skill.route",
+        name: "Skill路由",
+        summary: "检查是否命中特定 Skill",
+        fields: {
+          sessionKey,
+          agentId,
+          matched: false,
+          textPreview: previewLogValue(command.commandBodyNormalized ?? "", 120),
+          availableSkills: skillCommands.length,
+        },
+      }),
+    );
   }
   if (skillInvocation) {
     if (!command.isAuthorizedSender) {

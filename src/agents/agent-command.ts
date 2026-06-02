@@ -16,6 +16,7 @@ import {
 } from "../infra/agent-events.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { buildOutboundSessionContext } from "../infra/outbound/session-context.js";
+import { formatNodeLog } from "../logging/node-log.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { resolveAgentIdFromSessionKey } from "../routing/session-key.js";
@@ -1028,7 +1029,19 @@ async function agentCommandInternal(
         if (!lifecycleEnded) {
           const stopReason = result.meta.stopReason;
           if (stopReason && stopReason !== "end_turn") {
-            console.error(`[agent] run ${runId} ended with stopReason=${stopReason}`);
+            console.error(
+              formatNodeLog({
+                id: "lifecycle.emit",
+                name: "发送生命周期事件",
+                summary: "补发 lifecycle end 事件",
+                fields: {
+                  runId,
+                  phase: "end",
+                  status: "ok",
+                  stopReason,
+                },
+              }),
+            );
           }
           emitAgentEvent({
             runId,
@@ -1223,14 +1236,25 @@ async function agentCommandInternal(
   }
 }
 
-// 步骤3：Agent 调度器入口（CLI/本地入口），编排执行计划
+// Agent 调度器入口：编排 CLI/本地入口执行计划。
 // 此函数是 agentCommandInternal 的包装，为 CLI/本地调用设置信任级别（senderIsOwner=true）
 export async function agentCommand(
   opts: AgentCommandOpts,
   runtime: RuntimeEnv = defaultRuntime,
   deps?: CliDeps,
 ) {
-  console.log(`[agent] [agent-step-scheduler][Agent调度器入口] agent command entry / Agent 调度器入口被调用 sessionKey=${opts.sessionKey} provider=${opts.provider} model=${opts.model}`);
+  console.log(
+    formatNodeLog({
+      id: "agent.command.prepare",
+      name: "准备Agent运行",
+      summary: "解析会话、模型、thinking、workspace 和技能快照",
+      fields: {
+        sessionKey: opts.sessionKey,
+        provider: opts.provider,
+        model: opts.model,
+      },
+    }),
+  );
   return await agentCommandInternal(
     {
       ...opts,
@@ -1245,7 +1269,7 @@ export async function agentCommand(
     deps,
   );
 }
-// 步骤3.1：从入站消息（HTTP/WebSocket）触发 Agent 执行
+// 入站消息入口：从 HTTP/WebSocket 触发 Agent 执行。
 // 此函数是网络层到 Agent 执行层的桥接点，网络入口必须显式声明 senderIsOwner
 // 将 CommandInput 传给 agentCommandInternal，进入核心调度链路
 export async function agentCommandFromIngress(

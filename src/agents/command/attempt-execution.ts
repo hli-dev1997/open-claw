@@ -310,7 +310,7 @@ export async function persistCliTurnTranscript(params: {
   });
 }
 
-// 步骤3：【核心编排器】Agent Attempt执行入口——决定了本次问答使用哪种运行时
+// Agent attempt 编排入口：决定本次问答使用哪种运行时。
 // 判断逻辑：如果是CLI Provider（如Claude CLI）则走cli-runner，否则走Embedded PI Runner
 // 每次用户触发Agent对话，必定经过此函数。这里完成了：
 //   - 解析Agent运行时配置
@@ -352,7 +352,6 @@ export function runAgentAttempt(params: {
   allowTransientCooldownProbe?: boolean;
   sessionHasHistory?: boolean;
 }) {
-  console.log(`[agent] [agent-step-attempt-start][Agent尝试执行] runAgentAttempt start / 开始构建 Prompt 并分发到嵌入式 Agent 运行器 runId=${params.runId} sessionId=${params.sessionId} provider=${params.providerOverride ?? "auto"} model=${params.modelOverride ?? "auto"}`);
   const isRawModelRun = params.opts.modelRun === true || params.opts.promptMode === "none";
   const claudeCliFallbackPrelude =
     !isRawModelRun &&

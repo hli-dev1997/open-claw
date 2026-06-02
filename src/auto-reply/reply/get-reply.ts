@@ -600,6 +600,7 @@ export async function getReplyFromConfig(
       const hookResult = await hookRunner.runBeforeAgentReply(
         { cleanedBody },
         {
+          runId: opts?.runId,
           agentId,
           sessionKey: agentSessionKey,
           sessionId,

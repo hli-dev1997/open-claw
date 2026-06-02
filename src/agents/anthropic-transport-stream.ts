@@ -611,7 +611,6 @@ function createAnthropicMessagesClient(params: {
           },
           params.defaultHeaders,
         );
-        console.log(`[agent] [agent-step-llm-request][LLM请求] Anthropic API request / 正在向 Anthropic API 发起流式聊天请求 model=${body?.model || "unknown"}`);
         const response = await params.fetch(url, {
           method: "POST",
           headers,

@@ -43,6 +43,7 @@ import {
 import { logVerbose } from "../../globals.js";
 import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-events.js";
 import { formatErrorMessage } from "../../infra/errors.js";
+import { formatNodeLog, previewLogValue } from "../../logging/node-log.js";
 import { CommandLaneClearedError, GatewayDrainingError } from "../../process/command-queue.js";
 import { CommandLane } from "../../process/lanes.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -1112,7 +1113,20 @@ export async function runAgentTurnWithFallback(params: {
   let _loopIteration = 0;
   while (true) {
     _loopIteration += 1;
-    console.log(`[agent] [agent-step4-loop-entry][步骤A4-主循环入口] agent loop iteration / 进入第 N 次 Agent 执行循环（1=首次，>1=LiveModelSwitch/TransientHttp 重试） runId=${runId} sessionId=${params.followupRun.run.sessionId} iteration=${_loopIteration} provider=${params.followupRun.run.provider} model=${params.followupRun.run.model}`);
+    console.log(
+      formatNodeLog({
+        id: "agent.command.prepare",
+        name: "准备Agent运行",
+        summary: "解析会话、模型、thinking、workspace 和技能快照",
+        fields: {
+          runId,
+          sessionId: params.followupRun.run.sessionId,
+          iteration: _loopIteration,
+          provider: params.followupRun.run.provider,
+          model: params.followupRun.run.model,
+        },
+      }),
+    );
     try {
       const normalizeStreamingText = (payload: ReplyPayload): { text?: string; skip: boolean } => {
         let text = payload.text;
@@ -1214,7 +1228,19 @@ export async function runAgentTurnWithFallback(params: {
           return classification;
         },
         run: async (provider, model, runOptions) => {
-          console.log(`[agent] [agent-step5-model-select][步骤A5-模型选定] model selected for run / 模型选定，进入本轮 LLM 执行（含 Fallback 后重试） runId=${runId} sessionId=${params.followupRun.run.sessionId} provider=${provider} model=${model}`);
+          console.log(
+            formatNodeLog({
+              id: "agent.model.resolve",
+              name: "解析模型与认证",
+              summary: "解析 provider/model，并选择认证信息",
+              fields: {
+                runId,
+                sessionId: params.followupRun.run.sessionId,
+                provider,
+                model,
+              },
+            }),
+          );
           // Notify that model selection is complete (including after fallback).
           // This allows responsePrefix template interpolation with the actual model.
           params.opts?.onModelSelected?.({
@@ -1759,8 +1785,21 @@ export async function runAgentTurnWithFallback(params: {
       if (err instanceof LiveSessionModelSwitchError) {
         liveModelSwitchRetries += 1;
         if (liveModelSwitchRetries > MAX_LIVE_SWITCH_RETRIES) {
-          // [ERROR][节点6.E1:推理层-异常-ModelSwitch超重试] 模型实时切换重试次数超上限，放弃并返回错误
-          console.log(`[ERROR][节点6.E1:推理层-异常-ModelSwitch超重试] runId="${runId}" provider="${sanitizeForLog(err.provider)}" model="${sanitizeForLog(err.model)}" retries=${liveModelSwitchRetries} maxRetries=${MAX_LIVE_SWITCH_RETRIES}`);
+          console.log(
+            formatNodeLog({
+              id: "agent.failover.check",
+              name: "降级检查",
+              summary: "检查是否需要切换模型或 Auth Profile",
+              fields: {
+                runId,
+                status: "retry_exhausted",
+                provider: sanitizeForLog(err.provider),
+                model: sanitizeForLog(err.model),
+                retries: liveModelSwitchRetries,
+                maxRetries: MAX_LIVE_SWITCH_RETRIES,
+              },
+            }),
+          );
           // Prevent infinite loop when persisted session selection keeps
           // conflicting with fallback model choices (e.g. overloaded primary
           // triggers fallback, but session store keeps pulling back to the
@@ -1809,7 +1848,23 @@ export async function runAgentTurnWithFallback(params: {
       const isSessionCorruption = /function call turn comes immediately after/i.test(message);
       const isRoleOrderingError = /incorrect role information|roles must alternate/i.test(message);
       const isTransientHttp = isTransientHttpError(message);
-      console.log(`[agent] [agent-step-err-classify][异常分类] error classified / 捕获到异常，分类结果（据此分支到不同降级/重试策略） runId=${runId} sessionId=${params.followupRun.run.sessionId} isBilling=${isBilling} isContextOverflow=${isContextOverflow} isCompaction=${isCompactionFailure} isSessionCorruption=${isSessionCorruption} isTransientHttp=${isTransientHttp} msg="${message.substring(0, 100)}..."`);
+      console.log(
+        formatNodeLog({
+          id: "agent.failover.check",
+          name: "降级检查",
+          summary: "检查是否需要切换模型或 Auth Profile",
+          fields: {
+            runId,
+            sessionId: params.followupRun.run.sessionId,
+            isBilling,
+            isContextOverflow,
+            isCompaction: isCompactionFailure,
+            isSessionCorruption,
+            isTransientHttp,
+            errorPreview: previewLogValue(message, 100),
+          },
+        }),
+      );
 
       if (isReplyOperationRestartAbort(params.replyOperation)) {
         return {
@@ -1855,8 +1910,19 @@ export async function runAgentTurnWithFallback(params: {
         !didResetAfterCompactionFailure &&
         (await params.resetSessionAfterCompactionFailure(message))
       ) {
-        // [ERROR][节点6.E5:推理层-异常-Compaction失败] 上下文压缩失败，触发会话重置并回复提示
-        console.log(`[ERROR][节点6.E5:推理层-异常-Compaction失败] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" msg="${message.substring(0, 100)}..."`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "上下文压缩失败，触发会话重置并回复提示",
+            fields: {
+              runId,
+              sessionId: params.followupRun.run.sessionId,
+              errorKind: "compaction_failure",
+              errorPreview: previewLogValue(message, 100),
+            },
+          }),
+        );
         didResetAfterCompactionFailure = true;
         params.replyOperation?.fail("run_failed", err);
         return {
@@ -1874,8 +1940,19 @@ export async function runAgentTurnWithFallback(params: {
         };
       }
       if (isRoleOrderingError) {
-        // [ERROR][节点6.E7:推理层-异常-角色顺序错误] 消息角色顺序不合法（如 assistant 连续两条），尝试重置会话
-        console.log(`[ERROR][节点6.E7:推理层-异常-角色顺序错误] runId="${runId}" sessionKey="${params.sessionKey ?? "none"}" msg="${message.substring(0, 100)}..."`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "消息角色顺序不合法，尝试重置会话",
+            fields: {
+              runId,
+              sessionKey: params.sessionKey ?? "none",
+              errorKind: "role_ordering",
+              errorPreview: previewLogValue(message, 100),
+            },
+          }),
+        );
         const didReset = await params.resetSessionAfterRoleOrderingConflict(message);
         if (didReset) {
           params.replyOperation?.fail("run_failed", err);
@@ -1897,8 +1974,19 @@ export async function runAgentTurnWithFallback(params: {
       ) {
         const sessionKey = params.sessionKey;
         const corruptedSessionId = params.getActiveSessionEntry()?.sessionId;
-        // [ERROR][节点6.E6:推理层-异常-会话历史污染] Gemini function call 顺序错误导致会话污染，触发会话重置
-        console.log(`[ERROR][节点6.E6:推理层-异常-会话历史污染] runId="${runId}" sessionKey="${sessionKey}" corruptedSessionId="${corruptedSessionId ?? "unknown"}"`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "会话历史污染，触发会话重置",
+            fields: {
+              runId,
+              sessionKey,
+              corruptedSessionId: corruptedSessionId ?? "unknown",
+              errorKind: "session_corruption",
+            },
+          }),
+        );
         defaultRuntime.error(
           `Session history corrupted (Gemini function call ordering). Resetting session: ${params.sessionKey}`,
         );
@@ -1938,7 +2026,19 @@ export async function runAgentTurnWithFallback(params: {
 
       if (isTransientHttp && !didRetryTransientHttpError) {
         didRetryTransientHttpError = true;
-        console.log(`[agent] [agent-step-err-retry][异常重试] transient HTTP retry / 瞬时 HTTP 错误（502/521等），等待后重试全链路 runId=${runId} retryDelayMs=${TRANSIENT_HTTP_RETRY_DELAY_MS} msg="${message.substring(0, 100)}..."`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "瞬时 HTTP 错误，等待后重试全链路",
+            fields: {
+              runId,
+              retryDelayMs: TRANSIENT_HTTP_RETRY_DELAY_MS,
+              errorKind: "transient_http",
+              errorPreview: previewLogValue(message, 100),
+            },
+          }),
+        );
         // Retry the full runWithModelFallback() cycle — transient errors
         // (502/521/etc.) typically affect the whole provider, so falling
         // back to an alternate model first would not help. Instead we wait
@@ -1958,11 +2058,34 @@ export async function runAgentTurnWithFallback(params: {
       // reason labels like `(rate_limit)`, so string-matching the summary text
       // would misclassify mixed-cause exhaustion as a pure transient cooldown.
       const isFallbackSummary = isFallbackSummaryError(err);
-      // [ERROR][节点3.E2-E4:终态异常分支] 计费/限流/Context溢出终态处理
       if (isBilling) {
-        console.log(`[ERROR][节点6.E3:推理层-异常-计费错误] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" isFallbackSummary=${isFallbackSummary}`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "计费错误，进入终态处理",
+            fields: {
+              runId,
+              sessionId: params.followupRun.run.sessionId,
+              errorKind: "billing",
+              isFallbackSummary,
+            },
+          }),
+        );
       } else if (isContextOverflow) {
-        console.log(`[ERROR][节点6.E2:推理层-异常-Context溢出] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" msg="${message.substring(0, 100)}..."`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "上下文溢出，进入终态处理",
+            fields: {
+              runId,
+              sessionId: params.followupRun.run.sessionId,
+              errorKind: "context_overflow",
+              errorPreview: previewLogValue(message, 100),
+            },
+          }),
+        );
       }
       const isPureTransientSummary = isFallbackSummary
         ? isPureTransientRateLimitSummary(err)
@@ -1975,8 +2098,21 @@ export async function runAgentTurnWithFallback(params: {
           ? formatRateLimitOrOverloadedErrorCopy(message)
           : undefined;
       if (isRateLimit || rateLimitOrOverloadedCopy) {
-        // [ERROR][节点6.E4:推理层-异常-限流过载] 触发限流或服务过载，进入用户提示分支
-        console.log(`[ERROR][节点6.E4:推理层-异常-限流过载] runId="${runId}" sessionId="${params.followupRun.run.sessionId}" isRateLimit=${isRateLimit} isFallbackSummary=${isFallbackSummary} isPureTransient=${isPureTransientSummary}`);
+        console.log(
+          formatNodeLog({
+            id: "agent.failover.check",
+            name: "降级检查",
+            summary: "限流或服务过载，进入用户提示分支",
+            fields: {
+              runId,
+              sessionId: params.followupRun.run.sessionId,
+              errorKind: "rate_limit_or_overloaded",
+              isRateLimit,
+              isFallbackSummary,
+              isPureTransient: isPureTransientSummary,
+            },
+          }),
+        );
       }
       const safeMessage = isTransientHttp
         ? sanitizeUserFacingText(message, { errorContext: true })

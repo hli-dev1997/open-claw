@@ -2746,12 +2746,19 @@ describe("dispatchReplyFromConfig", () => {
     });
 
     const replyResolver = async () => ({ text: "hi" }) satisfies ReplyPayload;
-    await dispatchReplyFromConfig({ ctx, cfg, dispatcher, replyResolver });
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg,
+      dispatcher,
+      replyOptions: { runId: "run-message-received" },
+      replyResolver,
+    });
 
     expect(hookMocks.runner.runMessageReceived).toHaveBeenCalledWith(
       expect.objectContaining({
         from: ctx.From,
         content: "/search hello",
+        runId: "run-message-received",
         timestamp: 1710000000000,
         metadata: expect.objectContaining({
           originatingChannel: "Telegram",
@@ -2766,6 +2773,7 @@ describe("dispatchReplyFromConfig", () => {
         }),
       }),
       expect.objectContaining({
+        runId: "run-message-received",
         channelId: "telegram",
         accountId: "acc-1",
         conversationId: "telegram:999",
@@ -3894,7 +3902,12 @@ describe("before_dispatch hook", () => {
       Timestamp: 123,
     });
 
-    const result = await dispatchReplyFromConfig({ ctx, cfg: emptyConfig, dispatcher });
+    const result = await dispatchReplyFromConfig({
+      ctx,
+      cfg: emptyConfig,
+      dispatcher,
+      replyOptions: { runId: "run-before-dispatch" },
+    });
 
     expect(hookMocks.runner.runBeforeDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -3906,6 +3919,7 @@ describe("before_dispatch hook", () => {
         timestamp: 123,
       }),
       expect.objectContaining({
+        runId: "run-before-dispatch",
         channelId: "telegram",
         senderId: "signal:user:alice",
       }),

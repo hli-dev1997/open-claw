@@ -16,6 +16,7 @@ import {
   formatDiagnosticTraceparent,
   type DiagnosticTraceContext,
 } from "../../../infra/diagnostic-trace-context.js";
+import { formatNodeLog } from "../../../logging/node-log.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
 import type {
   PluginHookAgentContext,
@@ -234,7 +235,36 @@ function dispatchModelCallEndedHook(
   );
 }
 
-function emitModelCallStarted(eventBase: ModelCallEventBase): void {
+function modelRequestContextFields(context: Parameters<StreamFn>[1]) {
+  const messages = Array.isArray(context?.messages) ? context.messages : [];
+  const tools = Array.isArray(context?.tools) ? context.tools : [];
+  const lastMessage = messages.at(-1) as { role?: unknown } | undefined;
+  return {
+    messages: messages.length,
+    tools: tools.length,
+    lastRole: typeof lastMessage?.role === "string" ? lastMessage.role : undefined,
+  };
+}
+
+function emitModelCallStarted(
+  eventBase: ModelCallEventBase,
+  requestContext: Parameters<StreamFn>[1],
+): void {
+  console.log(
+    formatNodeLog({
+      id: "model.request",
+      name: "请求模型",
+      summary: "发送本轮模型请求",
+      fields: {
+        runId: eventBase.runId,
+        callId: eventBase.callId,
+        model: `${eventBase.provider}/${eventBase.model}`,
+        api: eventBase.api,
+        transport: eventBase.transport,
+        ...modelRequestContextFields(requestContext),
+      },
+    }),
+  );
   emitTrustedDiagnosticEvent({
     type: "model.call.started",
     ...eventBase,
@@ -249,6 +279,22 @@ function emitModelCallCompleted(
 ): void {
   const durationMs = Date.now() - startedAt;
   const sizeTimingFields = modelCallSizeTimingFields(state);
+  console.log(
+    formatNodeLog({
+      id: "model.response",
+      name: "模型响应完成",
+      summary: "收到本轮模型响应",
+      fields: {
+        runId: eventBase.runId,
+        callId: eventBase.callId,
+        model: `${eventBase.provider}/${eventBase.model}`,
+        durationMs,
+        requestBytes: sizeTimingFields.requestPayloadBytes,
+        responseBytes: sizeTimingFields.responseStreamBytes,
+        firstByteMs: sizeTimingFields.timeToFirstByteMs,
+      },
+    }),
+  );
   emitTrustedDiagnosticEvent({
     type: "model.call.completed",
     ...eventBase,
@@ -270,6 +316,20 @@ function emitModelCallError(
 ): void {
   const durationMs = Date.now() - startedAt;
   const sizeTimingFields = modelCallSizeTimingFields(state);
+  console.log(
+    formatNodeLog({
+      id: "model.response.error",
+      name: "模型响应失败",
+      summary: "本轮模型请求失败",
+      fields: {
+        runId: eventBase.runId,
+        callId: eventBase.callId,
+        model: `${eventBase.provider}/${eventBase.model}`,
+        durationMs,
+        errorCategory: fields.errorCategory,
+      },
+    }),
+  );
   emitTrustedDiagnosticEvent({
     type: "model.call.error",
     ...eventBase,
@@ -452,7 +512,7 @@ export function wrapStreamFnWithDiagnosticModelCallEvents(
     const callId = ctx.nextCallId();
     const trace = freezeDiagnosticTraceContext(createChildDiagnosticTraceContext(ctx.trace));
     const eventBase = baseModelCallEvent(ctx, callId, trace);
-    emitModelCallStarted(eventBase);
+    emitModelCallStarted(eventBase, streamContext);
     const startedAt = Date.now();
     const state: ModelCallObservationState = { responseStreamBytes: 0 };
     const propagatedOptions = withDiagnosticTraceparentHeader(options, trace, state);

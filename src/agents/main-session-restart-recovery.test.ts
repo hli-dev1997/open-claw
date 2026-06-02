@@ -57,6 +57,19 @@ function cleanedLock(sessionsDir: string, sessionId: string): SessionLockInspect
   };
 }
 
+function cleanedLiveButOldLock(sessionsDir: string, sessionId: string): SessionLockInspection {
+  return {
+    lockPath: path.join(sessionsDir, `${sessionId}.jsonl.lock`),
+    pid: process.pid,
+    pidAlive: true,
+    createdAt: new Date(Date.now() - 120_000).toISOString(),
+    ageMs: 120_000,
+    stale: true,
+    staleReasons: ["too-old"],
+    removed: true,
+  };
+}
+
 describe("main-session-restart-recovery", () => {
   it("marks only main running sessions whose transcript lock was cleaned", async () => {
     const sessionsDir = await makeSessionsDir();
@@ -92,6 +105,26 @@ describe("main-session-restart-recovery", () => {
     expect(store["agent:main:main"]?.abortedLastRun).toBe(true);
     expect(store["agent:main:subagent:child"]?.abortedLastRun).toBeUndefined();
     expect(store["agent:main:other"]?.abortedLastRun).toBeUndefined();
+  });
+
+  it("does not recover a session whose cleaned lock still has a live owner", async () => {
+    const sessionsDir = await makeSessionsDir();
+    await writeStore(sessionsDir, {
+      "agent:main:main": {
+        sessionId: "live-owner-session",
+        updatedAt: Date.now() - 10_000,
+        status: "running",
+      },
+    });
+
+    const result = await markRestartAbortedMainSessionsFromLocks({
+      sessionsDir,
+      cleanedLocks: [cleanedLiveButOldLock(sessionsDir, "live-owner-session")],
+    });
+
+    const store = loadSessionStore(path.join(sessionsDir, "sessions.json"));
+    expect(result).toEqual({ marked: 0, skipped: 0 });
+    expect(store["agent:main:main"]?.abortedLastRun).toBeUndefined();
   });
 
   it("resumes marked sessions with a tool-result transcript tail", async () => {

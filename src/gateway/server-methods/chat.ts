@@ -19,6 +19,7 @@ import { jsonUtf8Bytes } from "../../infra/json-utf8-bytes.js";
 import { normalizeReplyPayloadsForDelivery } from "../../infra/outbound/payloads.js";
 import { getSessionBindingService } from "../../infra/outbound/session-binding-service.js";
 import { logLargePayload } from "../../logging/diagnostic-payload.js";
+import { formatNodeLog, previewLogValue } from "../../logging/node-log.js";
 import {
   appendLocalMediaParentRoots,
   getAgentScopedMediaLocalRoots,
@@ -2314,22 +2315,41 @@ export const chatHandlers: GatewayRequestHandlers = {
    * @param context Gateway 请求上下文；承载配置加载、广播、去重、运行状态、日志和 abort 控制器等运行期能力。
    * @param client 当前 Gateway 客户端信息；用于 admin scope 权限判断、设备/连接归属和工具事件订阅。
    */
-  // 步骤1：接收用户 chat.send RPC 请求，解析消息内容
+  // WebChat 入口：接收 chat.send RPC 请求并解析消息内容。
   //todo 它在校验“这条消息是否伪装/代表某个外部渠道来源”，并把这组路由字段整理成后面可安全使用的结构。
   "chat.send": async ({ params, respond, context, client }) => {
+    const webchatReceivedAt = Date.now();
     const incomingParamsForLog = params as {
       sessionKey?: unknown;
       message?: unknown;
       attachments?: unknown;
       idempotencyKey?: unknown;
     };
-    const _sk = typeof incomingParamsForLog.sessionKey === "string" ? incomingParamsForLog.sessionKey : "invalid";
-    const _rid = typeof incomingParamsForLog.idempotencyKey === "string" ? incomingParamsForLog.idempotencyKey : "missing";
-    const _mc = typeof incomingParamsForLog.message === "string" ? incomingParamsForLog.message.length : 0;
-    const _ac = Array.isArray(incomingParamsForLog.attachments) ? incomingParamsForLog.attachments.length : 0;
+    const _sk =
+      typeof incomingParamsForLog.sessionKey === "string"
+        ? incomingParamsForLog.sessionKey
+        : "invalid";
+    const _rid =
+      typeof incomingParamsForLog.idempotencyKey === "string"
+        ? incomingParamsForLog.idempotencyKey
+        : "missing";
+    const _mc =
+      typeof incomingParamsForLog.message === "string" ? incomingParamsForLog.message.length : 0;
+    const _ac = Array.isArray(incomingParamsForLog.attachments)
+      ? incomingParamsForLog.attachments.length
+      : 0;
     context.logGateway.info(
-        //todo暂不打印runId=${_rid}因为中间有大量换行，待核查
-      `[gateway] [webchat-step1-rpc][步骤1-接收请求] chat.send received / 收到 chat.send 请求（前端 WebChat 发起对话入口，Gateway 开始处理） sessionKey=${_sk} messageChars=${_mc} attachmentCount=${_ac}`,
+      formatNodeLog({
+        id: "gw.webchat.accept",
+        name: "接收WebChat请求",
+        summary: "收到前端 chat.send，准备创建本次运行",
+        fields: {
+          runId: _rid,
+          sessionKey: _sk,
+          messageChars: _mc,
+          attachmentCount: _ac,
+        },
+      }),
     );
     //入口 DTO/schema 校验,防止非法 RPC 请求进入后续业务流程
     //校验的是 chat.send RPC 入参结构,大概等价于 Java 里的：@Valid ChatSendRequest request
@@ -2465,10 +2485,33 @@ export const chatHandlers: GatewayRequestHandlers = {
     const stopCommand = isChatStopCommandText(inboundMessage);
     const normalizedAttachments = normalizeRpcAttachmentsToChatAttachments(p.attachments);
     const rawMessage = inboundMessage.trim();
-    // Step 1.1: log sanitized inbound metadata without printing user content.
-    // 步骤1.1：打印清洗后的入站元信息，不打印用户正文内容。
-    context.logGateway.debug(
-      `[gateway] [webchat-step1-rpc][步骤1-请求清洗] chat.send sanitized / 请求已清洗（Unicode规范化、null byte过滤、附件归一化） runId=${p.idempotencyKey} sessionKey=${p.sessionKey} rawMessageChars=${rawMessage.length} attachmentCount=${normalizedAttachments.length} stopCommand=${String(stopCommand)}`,
+    context.logGateway.info(
+      formatNodeLog({
+        id: "user.input.received",
+        name: "接收用户原文",
+        summary: "收到用户输入，准备进入 Gateway 处理",
+        fields: {
+          runId: p.idempotencyKey,
+          textPreview: previewLogValue(inboundMessage, 120),
+          chars: inboundMessage.length,
+          channel: "webchat",
+        },
+      }),
+    );
+    context.logGateway.info(
+      formatNodeLog({
+        id: "user.input.normalized",
+        name: "规范化用户输入",
+        summary: "去除首尾空白、合并附件和上下文",
+        fields: {
+          runId: p.idempotencyKey,
+          sessionKey: p.sessionKey,
+          textPreview: previewLogValue(rawMessage, 120),
+          rawMessageChars: rawMessage.length,
+          attachmentCount: normalizedAttachments.length,
+          stopCommand,
+        },
+      }),
     );
     /**
      * 这是空请求拦截：消息正文为空 && 附件也为空 => 拒绝
@@ -2501,9 +2544,6 @@ export const chatHandlers: GatewayRequestHandlers = {
     //这里是关键。loadSessionEntry 会根据 sessionKey 加载当前会话相关信息：
     const rawSessionKey = p.sessionKey;
     const { cfg, entry, canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
-    context.logGateway.debug(
-      `[gateway] [webchat-step1-rpc][步骤1-加载会话配置] load session/config / 加载会话和配置（根据 sessionKey 查找 agent、模型、渠道绑定） runId=${p.idempotencyKey} rawSessionKey=${rawSessionKey} sessionKey=${sessionKey} hasEntry=${String(Boolean(entry))}`,
-    );
     /**
      * OpenClaw 支持多 agent。某些 sessionKey 可能带 agent 信息，比如逻辑上对应：
      * agentA:main
@@ -2536,7 +2576,34 @@ export const chatHandlers: GatewayRequestHandlers = {
       config: cfg,
     });
     context.logGateway.info(
-      `[gateway] [webchat-step1-rpc][步骤1-入口处理完成] request ready / 入参校验、会话加载、Agent 解析完成（准备进入附件解析/分发阶段） runId=${p.idempotencyKey} sessionKey=${sessionKey} agentId=${agentId} messageChars=${rawMessage.length} attachmentCount=${normalizedAttachments.length} stopCommand=${String(stopCommand)}`,
+      formatNodeLog({
+        id: "request.route",
+        name: "请求路由",
+        summary: "解析 session、agent、channel 和 queue mode",
+        fields: {
+          runId: p.idempotencyKey,
+          rawSessionKey,
+          sessionKey,
+          agentId,
+          hasEntry: Boolean(entry),
+          queueMode: "steer",
+        },
+      }),
+    );
+    context.logGateway.info(
+      formatNodeLog({
+        id: "gw.webchat.ready",
+        name: "请求准备完成",
+        summary: "入参校验、会话加载、Agent 解析完成",
+        fields: {
+          runId: p.idempotencyKey,
+          sessionKey,
+          agentId,
+          messageChars: rawMessage.length,
+          attachmentCount: normalizedAttachments.length,
+          stopCommand,
+        },
+      }),
     );
     let parsedMessage = inboundMessage;
     let parsedImages: ChatImageContent[] = [];
@@ -2612,7 +2679,20 @@ export const chatHandlers: GatewayRequestHandlers = {
         model: modelRef.model,
       });
       context.logGateway.info(
-        `[gateway] [webchat-step2-attach][步骤2-解析附件] parse attachments start / 开始解析附件（将用户上传的文件转为 Agent 可引用的媒体资源） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} attachmentCount=${normalizedAttachments.length} provider=${modelRef.provider} model=${modelRef.model} supportsSessionModelImages=${String(supportsSessionModelImages)}`,
+        formatNodeLog({
+          id: "gw.webchat.attach.start",
+          name: "解析附件",
+          summary: "将用户上传的文件转为 Agent 可引用的媒体资源",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            attachmentCount: normalizedAttachments.length,
+            provider: modelRef.provider,
+            model: modelRef.model,
+            supportsSessionModelImages,
+          },
+        }),
       );
       // Bound plugin sessions own the real recipient model, so keep image
       // attachments even when the parent OpenClaw session model is text-only.
@@ -2657,11 +2737,34 @@ export const chatHandlers: GatewayRequestHandlers = {
           agentId,
         }));
         context.logGateway.info(
-          `[gateway] [webchat-step2-attach][步骤2-解析附件完成] parse attachments complete / 附件解析完成（图片、文件 offload 已就绪） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} imageCount=${parsedImages.length} imageOrderCount=${imageOrder.length} offloadedRefCount=${offloadedRefs.length} mediaPathCount=${mediaPathOffloadPaths.length}`,
+          formatNodeLog({
+            id: "gw.webchat.attach.done",
+            name: "附件解析完成",
+            summary: "图片、文件 offload 已就绪",
+            fields: {
+              runId: clientRunId,
+              sessionKey,
+              agentId,
+              imageCount: parsedImages.length,
+              imageOrderCount: imageOrder.length,
+              offloadedRefCount: offloadedRefs.length,
+              mediaPathCount: mediaPathOffloadPaths.length,
+            },
+          }),
         );
       } catch (err) {
         context.logGateway.warn(
-          `[gateway] [webchat-step2-attach][步骤2-解析附件失败] parse attachments failed / 附件解析失败 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} error=${formatForLog(err)}`,
+          formatNodeLog({
+            id: "gw.webchat.attach.error",
+            name: "附件解析失败",
+            summary: "附件解析失败",
+            fields: {
+              runId: clientRunId,
+              sessionKey,
+              agentId,
+              error: formatForLog(err),
+            },
+          }),
         );
         respond(
           false,
@@ -2676,10 +2779,18 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
 
     try {
-      // Step 3: register an abortable chat run before the async Agent work starts.
-      // 步骤3：注册可中止的 chat run，后续 stop/超时/清理都依赖这里的运行状态。
       context.logGateway.info(
-        `[gateway] [webchat-step3-run][步骤3-注册运行状态] register chat run / 注册可中止运行（绑定 AbortController 用于停止/超时/清理） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} timeoutMs=${timeoutMs}`,
+        formatNodeLog({
+          id: "gw.webchat.run.register",
+          name: "注册运行状态",
+          summary: "创建 AbortController，绑定本次可中止运行",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            timeoutMs,
+          },
+        }),
       );
       const activeRunAbort = registerChatAbortController({
         chatAbortControllers: context.chatAbortControllers,
@@ -2694,7 +2805,16 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
       if (!activeRunAbort.registered) {
         context.logGateway.info(
-          `[gateway] [webchat-step3-run][步骤3-重复运行] duplicate run in flight / 重复 runId 已在运行（幂等保护，拒绝重复请求） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+          formatNodeLog({
+            id: "gw.webchat.run.duplicate",
+            name: "重复运行",
+            summary: "重复 runId 已在运行，返回幂等结果",
+            fields: {
+              runId: clientRunId,
+              sessionKey,
+              agentId,
+            },
+          }),
         );
         respond(true, { runId: clientRunId, status: "in_flight" as const }, undefined, {
           cached: true,
@@ -2712,7 +2832,17 @@ export const chatHandlers: GatewayRequestHandlers = {
       };
       respond(true, ackPayload, undefined, { runId: clientRunId });
       context.logGateway.info(
-        `[gateway] [webchat-step3-run][步骤3-运行已注册] run registered and acked / 已注册运行状态并告知前端开始处理（respond accepted） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} timeoutMs=${timeoutMs}`,
+        formatNodeLog({
+          id: "gw.webchat.ack",
+          name: "返回受理结果",
+          summary: "已向前端返回 accepted",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            timeoutMs,
+          },
+        }),
       );
       const persistedImagesPromise = persistChatSendImages({
         images: parsedImages,
@@ -2757,7 +2887,7 @@ export const chatHandlers: GatewayRequestHandlers = {
       const stampedMessage = injectTimestamp(messageForAgent, timestampOptsFromConfig(cfg));
 
       // Step 4: build the MsgContext consumed by auto-reply and the Agent runtime.
-      // 步骤4：组装 MsgContext，这是交给 auto-reply 和 Agent 运行时的请求对象。
+      // Agent 请求上下文：组装交给 auto-reply 和 Agent 运行时的 MsgContext。
       const ctx: MsgContext = {
         Body: messageForAgent,
         BodyForAgent: stampedMessage,
@@ -2797,7 +2927,22 @@ export const chatHandlers: GatewayRequestHandlers = {
         ctx.MediaStaged = true;
       }
       context.logGateway.debug(
-        `[gateway] [webchat-step4-context][步骤4-组装Agent请求对象] build MsgContext / 组装 Agent 请求上下文（Body/BodyForAgent/Channel/MediaPath） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} provider=${ctx.Provider} chatType=${ctx.ChatType} hasOriginatingRoute=${String(Boolean(originatingChannel || originatingTo || explicitDeliverRoute))} hasMediaPaths=${String(mediaPathOffloadPaths.length > 0)}`,
+        formatNodeLog({
+          id: "gw.webchat.context",
+          name: "组装Agent请求对象",
+          summary: "组装 Agent 请求上下文",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            provider: ctx.Provider,
+            chatType: ctx.ChatType,
+            hasOriginatingRoute: Boolean(
+              originatingChannel || originatingTo || explicitDeliverRoute,
+            ),
+            hasMediaPaths: mediaPathOffloadPaths.length > 0,
+          },
+        }),
       );
 
       const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
@@ -2807,12 +2952,36 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
       const onWebchatModelSelected: typeof onModelSelected = (modelCtx) => {
         context.logGateway.info(
-          `[gateway] [webchat-step7-model][步骤7-模型已选择] model selected / Agent 已选择模型（onModelSelected 回调通知 Gateway，晚于 Agent 内部模型选定是正常异步时序） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} provider=${modelCtx.provider} model=${modelCtx.model} thinkLevel=${modelCtx.thinkLevel ?? "none"}`,
+          formatNodeLog({
+            id: "gw.webchat.model.selected",
+            name: "模型已选择",
+            summary: "onModelSelected 回调通知 Gateway",
+            fields: {
+              runId: clientRunId,
+              sessionKey,
+              agentId,
+              provider: modelCtx.provider,
+              model: modelCtx.model,
+              thinkLevel: modelCtx.thinkLevel ?? "none",
+            },
+          }),
         );
         onModelSelected(modelCtx);
       };
       context.logGateway.info(
-        `[gateway] [webchat-step4-context][步骤4-请求对象准备完成] context and reply pipeline ready / Agent 请求对象和回复管线（dispatcher）准备完成 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} provider=${ctx.Provider} channel=${INTERNAL_MESSAGE_CHANNEL} hasMediaPaths=${String(mediaPathOffloadPaths.length > 0)}`,
+        formatNodeLog({
+          id: "gw.webchat.pipeline.ready",
+          name: "回复管线就绪",
+          summary: "Agent 请求对象和 dispatcher 准备完成",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            provider: ctx.Provider,
+            channel: INTERNAL_MESSAGE_CHANNEL,
+            hasMediaPaths: mediaPathOffloadPaths.length > 0,
+          },
+        }),
       );
       const deliveredReplies: Array<{ payload: ReplyPayload; kind: "block" | "final" }> = [];
       let appendedWebchatAgentMedia = false;
@@ -2945,7 +3114,17 @@ export const chatHandlers: GatewayRequestHandlers = {
           }
           appendedWebchatAgentMedia = true;
           context.logGateway.info(
-            `[gateway] [webchat-step9-media-transcript][步骤9-写入媒体回复] append media assistant transcript / 写入媒体类助手回复到 transcript（TTS/图片等媒体内容） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} messageId=${appended.messageId ?? "missing"}`,
+            formatNodeLog({
+              id: "transcript.write.assistant",
+              name: "写入助手消息",
+              summary: "assistant media reply 已持久化",
+              fields: {
+                runId: clientRunId,
+                sessionKey,
+                agentId,
+                messageId: appended.messageId ?? "missing",
+              },
+            }),
           );
           return;
         }
@@ -2961,7 +3140,20 @@ export const chatHandlers: GatewayRequestHandlers = {
         deliver: async (payload, info) => {
           if (info.kind === "final" || info.kind === "tool" || isMediaBearingPayload(payload)) {
             context.logGateway.info(
-              `[gateway] [webchat-step8-reply][步骤8-收到回复片段] reply payload received / 收到 Agent 流式回复片段（LLM 输出通过 dispatcher 回调到 gateway） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} kind=${info.kind} hasText=${String(Boolean(payload.text?.trim()))} hasMedia=${String(isMediaBearingPayload(payload))} isReasoning=${String(payload.isReasoning === true)}`,
+              formatNodeLog({
+                id: "gw.webchat.reply",
+                name: "返回前端回复",
+                summary: "Gateway 收到 Agent 回复并发送给 WebChat",
+                fields: {
+                  runId: clientRunId,
+                  sessionKey,
+                  agentId,
+                  kind: info.kind,
+                  hasText: Boolean(payload.text?.trim()),
+                  hasMedia: isMediaBearingPayload(payload),
+                  isReasoning: payload.isReasoning === true,
+                },
+              }),
             );
           }
           switch (info.kind) {
@@ -2986,30 +3178,52 @@ export const chatHandlers: GatewayRequestHandlers = {
         },
       });
 
-      // Step 1.2: surface accepted inbound turns immediately so transcript subscribers
-      // (gateway watchers, MCP bridges, external channel backends) do not wait
-      // on model startup, completion, or failure paths before seeing the user turn.
-      // 步骤1.2：立即暴露已接受的入站回合，让 transcript 订阅者（Gateway watcher、MCP bridge、外部渠道后端）不用等待模型启动、完成或失败路径，就能看到用户回合。
       context.logGateway.info(
-        `[gateway] [webchat-step5-transcript][步骤5-立即显示用户消息] eager user turn emit start / 立即把用户消息显示到 transcript（不等 LLM 启动，直接让前端看到用户发言） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} imageCount=${parsedImages.length} offloadedRefCount=${offloadedRefs.length}`,
+        formatNodeLog({
+          id: "gw.webchat.user.emit",
+          name: "显示用户消息",
+          summary: "立即把用户消息写入前端 transcript",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            imageCount: parsedImages.length,
+            offloadedRefCount: offloadedRefs.length,
+          },
+        }),
       );
       void emitUserTranscriptUpdate()
-        .then(() => {
-          context.logGateway.debug(
-            `[gateway] [webchat-step5-transcript][步骤5-立即显示用户消息完成] eager user turn emit complete / 用户消息已显示到 transcript runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
-          );
-        })
         .catch((transcriptErr) => {
           context.logGateway.warn(
-            `[gateway] [webchat-step5-transcript][步骤5-立即显示用户消息失败] eager user turn emit failed / 用户消息显示失败 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} error=${formatForLog(transcriptErr)}`,
+            formatNodeLog({
+              id: "gw.webchat.user.emit.error",
+              name: "显示用户消息失败",
+              summary: "前端 transcript 更新失败",
+              fields: {
+                runId: clientRunId,
+                sessionKey,
+                agentId,
+                error: formatForLog(transcriptErr),
+              },
+            }),
           );
         });
 
       let agentRunStarted = false;
-      // Step 2: dispatch the message into the Agent scheduling pipeline.
-      // 步骤2：将消息分发到 Agent 调度管线，进入 auto-reply 模块。
       context.logGateway.info(
-        `[gateway] [webchat-step6-dispatch][步骤6-分发到Agent] dispatch inbound start / 开始分发入站消息（调用 dispatchInboundMessage 进入 auto-reply 引擎） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} imageCount=${parsedImages.length} imageOrderCount=${imageOrder.length} mediaPathCount=${mediaPathOffloadPaths.length}`,
+        formatNodeLog({
+          id: "gw.webchat.dispatch",
+          name: "分发到Agent",
+          summary: "调用 dispatchInboundMessage 进入 auto-reply 引擎",
+          fields: {
+            runId: clientRunId,
+            sessionKey,
+            agentId,
+            imageCount: parsedImages.length,
+            imageOrderCount: imageOrder.length,
+            mediaPathCount: mediaPathOffloadPaths.length,
+          },
+        }),
       );
       void dispatchInboundMessage({
         ctx,
@@ -3029,7 +3243,19 @@ export const chatHandlers: GatewayRequestHandlers = {
               GATEWAY_CLIENT_CAPS.TOOL_EVENTS,
             );
             context.logGateway.info(
-              `[gateway] [webchat-step6-dispatch][步骤6-Agent运行开始] agent run started / Agent 已开始运行（底层嵌入式 Agent 引擎已启动） runId=${runId} clientRunId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} connId=${connId ?? "none"} wantsToolEvents=${String(wantsToolEvents)}`,
+              formatNodeLog({
+                id: "gw.webchat.run.start",
+                name: "Agent运行开始",
+                summary: "底层嵌入式 Agent 已启动",
+                fields: {
+                  runId,
+                  clientRunId,
+                  sessionKey,
+                  agentId,
+                  connId: connId ?? "none",
+                  wantsToolEvents,
+                },
+              }),
             );
             if (connId && wantsToolEvents) {
               context.registerToolEventRecipient(runId, connId);
@@ -3049,24 +3275,54 @@ export const chatHandlers: GatewayRequestHandlers = {
       })
         .then(async () => {
           context.logGateway.debug(
-            `[gateway] [webchat-step6-dispatch][步骤6-分发完成] dispatch inbound complete / 入站消息分发完成 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} agentRunStarted=${String(agentRunStarted)} deliveredReplyCount=${deliveredReplies.length}`,
+            formatNodeLog({
+              id: "gw.webchat.dispatch.done",
+              name: "分发完成",
+              summary: "入站消息分发完成",
+              fields: {
+                runId: clientRunId,
+                sessionKey,
+                agentId,
+                agentRunStarted,
+                deliveredReplyCount: deliveredReplies.length,
+              },
+            }),
           );
-          // Step 7: rewrite temporary user media references after dispatch settles.
-          // 步骤7：调度结束后，把用户消息里的临时媒体引用改写成最终可回放的引用。
+          // 用户媒体回写：调度结束后把临时媒体引用改写成最终可回放引用。
           if (parsedImages.length > 0 || offloadedRefs.length > 0) {
             context.logGateway.info(
-              `[gateway] [webchat-step10-media-rewrite][步骤10-改写用户媒体引用] rewrite user media start / 开始改写用户消息中的临时媒体引用为最终可回放的引用 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+              formatNodeLog({
+                id: "transcript.write.user.media_rewrite",
+                name: "改写用户媒体引用",
+                summary: "开始改写用户消息中的临时媒体引用为最终可回放的引用",
+                fields: { runId: clientRunId, sessionKey, agentId },
+              }),
             );
           }
           await rewriteUserTranscriptMedia();
           if (parsedImages.length > 0 || offloadedRefs.length > 0) {
             context.logGateway.info(
-              `[gateway] [webchat-step10-media-rewrite][步骤10-改写媒体引用完成] rewrite user media complete / 用户消息媒体引用改写完成 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+              formatNodeLog({
+                id: "transcript.write.user.media_rewrite.done",
+                name: "改写媒体引用完成",
+                summary: "用户消息媒体引用改写完成",
+                fields: { runId: clientRunId, sessionKey, agentId },
+              }),
             );
           }
           if (!agentRunStarted) {
             context.logGateway.debug(
-              `[gateway] [webchat-step11-finalize][步骤11-处理无Agent直接回复] finalize non-agent reply / 处理未启动 Agent 的直接回复（如 BTW 旁路回复） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} deliveredReplyCount=${deliveredReplies.length}`,
+              formatNodeLog({
+                id: "gw.webchat.direct_reply",
+                name: "处理直接回复",
+                summary: "处理未启动 Agent 的直接回复",
+                fields: {
+                  runId: clientRunId,
+                  sessionKey,
+                  agentId,
+                  deliveredReplyCount: deliveredReplies.length,
+                },
+              }),
             );
             await emitUserTranscriptUpdate();
             const btwReplies = deliveredReplies
@@ -3079,7 +3335,17 @@ export const chatHandlers: GatewayRequestHandlers = {
               .trim();
             if (btwReplies.length > 0 && btwText) {
               context.logGateway.info(
-                `[gateway] [webchat-step13-broadcast][步骤13-广播BTW结果] broadcast btw result / 广播 BTW 侧边结果给 WebChat 前端 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} btwReplyCount=${btwReplies.length}`,
+                formatNodeLog({
+                  id: "gw.webchat.reply",
+                  name: "返回前端回复",
+                  summary: "广播 BTW 侧边结果给 WebChat 前端",
+                  fields: {
+                    runId: clientRunId,
+                    sessionKey,
+                    agentId,
+                    btwReplyCount: btwReplies.length,
+                  },
+                }),
               );
               broadcastSideResult({
                 context,
@@ -3099,7 +3365,12 @@ export const chatHandlers: GatewayRequestHandlers = {
                 sessionKey,
               });
               context.logGateway.info(
-                `[gateway] [webchat-step13-broadcast][步骤13-广播最终状态] broadcast chat final / 广播聊天最终状态给所有订阅者（无消息体） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} hasMessage=false`,
+                formatNodeLog({
+                  id: "gw.webchat.reply",
+                  name: "返回前端回复",
+                  summary: "广播聊天最终状态给所有订阅者",
+                  fields: { runId: clientRunId, sessionKey, agentId, hasMessage: false },
+                }),
               );
             } else {
               const finalPayloads = appendedWebchatAgentMedia
@@ -3108,7 +3379,18 @@ export const chatHandlers: GatewayRequestHandlers = {
                     .filter((entry) => entry.kind === "final")
                     .map((entry) => entry.payload);
               context.logGateway.info(
-                `[gateway] [webchat-step11-finalize][步骤11-组装助手回复] build assistant reply / 组装助手最终回复（从 deliveredReplies 提取 final 类 payload） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} finalPayloadCount=${finalPayloads.length} appendedWebchatAgentMedia=${String(appendedWebchatAgentMedia)}`,
+                formatNodeLog({
+                  id: "agent.reply.final",
+                  name: "合成最终回复",
+                  summary: "从 deliveredReplies 提取 final 类 payload",
+                  fields: {
+                    runId: clientRunId,
+                    sessionKey,
+                    agentId,
+                    finalPayloadCount: finalPayloads.length,
+                    appendedWebchatAgentMedia,
+                  },
+                }),
               );
               const { storePath: latestStorePath, entry: latestEntry } =
                 loadSessionEntry(sessionKey);
@@ -3186,9 +3468,6 @@ export const chatHandlers: GatewayRequestHandlers = {
                 persistedContentForAppend?.length ||
                 assistantContent?.length
               ) {
-                context.logGateway.info(
-                  `[gateway] [webchat-step12-transcript][步骤12-写入助手回复] append assistant transcript / 写入助手回复到 transcript 文件 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} hasTranscriptText=${String(Boolean(transcriptReply))} persistedContentBlocks=${persistedContentForAppend?.length ?? 0}`,
-                );
                 const appended = appendAssistantTranscriptMessage({
                   message: transcriptReply,
                   ...(persistedContentForAppend?.length
@@ -3211,11 +3490,32 @@ export const chatHandlers: GatewayRequestHandlers = {
                     ? { ...appended.message, content: broadcastAssistantContent }
                     : appended.message;
                   context.logGateway.info(
-                    `[gateway] [webchat-step12-transcript][步骤12-写入助手回复完成] append assistant transcript complete / 助手回复写入 transcript 完成 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} messageId=${appended.messageId ?? "missing"} broadcastContentBlocks=${broadcastAssistantContent?.length ?? 0}`,
+                    formatNodeLog({
+                      id: "transcript.write.assistant",
+                      name: "写入助手消息",
+                      summary: "assistant final reply 已持久化",
+                      fields: {
+                        runId: clientRunId,
+                        sessionKey,
+                        agentId,
+                        messageId: appended.messageId ?? "missing",
+                        broadcastContentBlocks: broadcastAssistantContent?.length ?? 0,
+                      },
+                    }),
                   );
                 } else {
                   context.logGateway.warn(
-                    `[gateway] [webchat-step12-transcript][步骤12-写入助手回复失败] append assistant transcript failed / 助手回复写入 transcript 失败 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} error=${appended.error ?? "unknown error"}`,
+                    formatNodeLog({
+                      id: "transcript.write.assistant.error",
+                      name: "写入助手消息失败",
+                      summary: "assistant final reply 写入失败",
+                      fields: {
+                        runId: clientRunId,
+                        sessionKey,
+                        agentId,
+                        error: appended.error ?? "unknown error",
+                      },
+                    }),
                   );
                   const fallbackAssistantContent =
                     stripManagedOutgoingAssistantContentBlocks(persistedAssistantContent) ??
@@ -3247,18 +3547,43 @@ export const chatHandlers: GatewayRequestHandlers = {
                 message,
               });
               context.logGateway.info(
-                `[gateway] [webchat-step13-broadcast][步骤13-广播最终状态] broadcast chat final / 广播聊天最终状态给所有订阅者 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} hasMessage=${String(Boolean(message))}`,
+                formatNodeLog({
+                  id: "gw.webchat.reply",
+                  name: "返回前端回复",
+                  summary: "广播聊天最终状态给所有订阅者",
+                  fields: {
+                    runId: clientRunId,
+                    sessionKey,
+                    agentId,
+                    hasMessage: Boolean(message),
+                  },
+                }),
               );
             }
           } else {
             context.logGateway.debug(
-              `[gateway] [webchat-step11-finalize][步骤11-Agent流式已完成] finalize agent reply / Agent 已运行完毕，流式回复已由运行管线处理 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} deliveredReplyCount=${deliveredReplies.length}`,
+              formatNodeLog({
+                id: "gw.webchat.reply",
+                name: "返回前端回复",
+                summary: "Agent 已运行完毕，流式回复已由运行管线处理",
+                fields: {
+                  runId: clientRunId,
+                  sessionKey,
+                  agentId,
+                  deliveredReplyCount: deliveredReplies.length,
+                },
+              }),
             );
             void emitUserTranscriptUpdate();
           }
           if (!context.chatAbortedRuns.has(clientRunId)) {
             context.logGateway.debug(
-              `[gateway] [webchat-step14-dedupe][步骤14-记录去重缓存] record success dedupe / 记录本次请求成功结果到去重缓存（防止重复提交） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+              formatNodeLog({
+                id: "gw.webchat.dedupe.record",
+                name: "记录去重缓存",
+                summary: "记录本次请求成功结果到去重缓存",
+                fields: { runId: clientRunId, sessionKey, agentId },
+              }),
             );
             setGatewayDedupeEntry({
               dedupe: context.dedupe,
@@ -3273,7 +3598,18 @@ export const chatHandlers: GatewayRequestHandlers = {
         })
         .catch((err) => {
           context.logGateway.warn(
-            `[gateway] [webchat-step6-dispatch][步骤6-分发失败] dispatch inbound failed / 入站消息分发失败 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId} agentRunStarted=${String(agentRunStarted)} error=${formatForLog(err)}`,
+            formatNodeLog({
+              id: "gw.webchat.dispatch.error",
+              name: "分发失败",
+              summary: "入站消息分发失败",
+              fields: {
+                runId: clientRunId,
+                sessionKey,
+                agentId,
+                agentRunStarted,
+                error: formatForLog(err),
+              },
+            }),
           );
           void rewriteUserTranscriptMedia().catch((rewriteErr) => {
             context.logGateway.warn(
@@ -3307,12 +3643,27 @@ export const chatHandlers: GatewayRequestHandlers = {
             errorMessage: String(err),
           });
           context.logGateway.warn(
-            `[gateway] [webchat-step13-broadcast][步骤13-广播错误状态] broadcast chat error / 广播聊天错误状态给所有订阅者 runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+            formatNodeLog({
+              id: "gw.webchat.reply",
+              name: "返回前端回复",
+              summary: "广播聊天错误状态给所有订阅者",
+              fields: { runId: clientRunId, sessionKey, agentId },
+            }),
           );
         })
         .finally(() => {
           context.logGateway.info(
-            `[gateway] [webchat-step15-cleanup][步骤15-清理运行状态] cleanup chat run / 清理本次运行状态（移除 AbortController、从运行列表注销） runId=${clientRunId} sessionKey=${sessionKey} agentId=${agentId}`,
+            formatNodeLog({
+              id: "gw.webchat.cleanup",
+              name: "清理运行状态",
+              summary: "移除 AbortController，注销本次运行并记录端到端耗时",
+              fields: {
+                runId: clientRunId,
+                sessionKey,
+                agentId,
+                endToEndDurationMs: Date.now() - webchatReceivedAt,
+              },
+            }),
           );
           activeRunAbort.cleanup();
           context.removeChatRun(clientRunId, clientRunId, sessionKey);

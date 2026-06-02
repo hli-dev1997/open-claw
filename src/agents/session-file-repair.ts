@@ -195,6 +195,7 @@ function buildRepairSummaryParts(params: {
 export async function repairSessionFileIfNeeded(params: {
   sessionFile: string;
   warn?: (message: string) => void;
+  info?: (message: string) => void;
 }): Promise<RepairReport> {
   const sessionFile = params.sessionFile.trim();
   if (!sessionFile) {

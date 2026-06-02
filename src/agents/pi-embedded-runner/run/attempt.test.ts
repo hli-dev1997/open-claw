@@ -834,7 +834,7 @@ describe("wrapStreamFnTrimToolCallNames", () => {
   async function invokeWrappedStream(
     baseFn: (...args: never[]) => unknown,
     allowedToolNames?: Set<string>,
-    guardOptions?: { unknownToolThreshold?: number },
+    guardOptions?: { unknownToolThreshold?: number; runId?: string; sessionKey?: string },
   ) {
     return await invokeWrappedTestStream(
       (innerBaseFn) =>
@@ -882,6 +882,7 @@ describe("wrapStreamFnTrimToolCallNames", () => {
   });
 
   it("supports async stream functions that return a promise", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const finalToolCall = { type: "toolCall", name: " browser " };
     const finalMessage = { role: "assistant", content: [finalToolCall] };
     const baseFn = vi.fn(async () =>
@@ -891,12 +892,20 @@ describe("wrapStreamFnTrimToolCallNames", () => {
       }),
     );
 
-    const stream = await invokeWrappedStream(baseFn);
+    const stream = await invokeWrappedStream(baseFn, undefined, {
+      runId: "run-tool-choice",
+      sessionKey: "agent:main:webchat",
+    });
     const result = await stream.result();
 
     expect(finalToolCall.name).toBe("browser");
     expect(result).toBe(finalMessage);
     expect(baseFn).toHaveBeenCalledTimes(1);
+    const nodeLogs = consoleLog.mock.calls.map((call) => String(call[0]));
+    expect(nodeLogs.filter((line) => line.includes("[tool.batch.detect]"))).toHaveLength(1);
+    expect(nodeLogs.filter((line) => line.includes("[tool.batch.start]"))).toHaveLength(1);
+    expect(nodeLogs.filter((line) => line.includes("[model.tool_choice]"))).toHaveLength(1);
+    expect(nodeLogs.join("\n")).toContain('runId="run-tool-choice"');
   });
   it("normalizes common tool aliases when the canonical name is allowed", async () => {
     const finalToolCall = { type: "toolCall", name: " BASH " };

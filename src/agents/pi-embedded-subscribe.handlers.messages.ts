@@ -186,6 +186,28 @@ function clearPendingToolMedia(
   state.pendingToolTrustedLocalMedia = false;
 }
 
+function beginDeclaredToolBatch(state: EmbeddedPiSubscribeState, message: AgentMessage) {
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) {
+    return;
+  }
+  const toolCallIds = content.flatMap((block) => {
+    if (!block || typeof block !== "object") {
+      return [];
+    }
+    const record = block as { type?: unknown; id?: unknown };
+    return record.type === "toolCall" && typeof record.id === "string" ? [record.id] : [];
+  });
+  if (toolCallIds.length === 0) {
+    return;
+  }
+  state.pendingToolBatchCallIds.clear();
+  for (const toolCallId of toolCallIds) {
+    state.pendingToolBatchCallIds.add(toolCallId);
+  }
+  state.toolBatchHadError = false;
+}
+
 function hasReplyMedia(payload: BlockReplyPayload): boolean {
   return (payload.mediaUrls ?? []).some((url) => url.trim().length > 0);
 }
@@ -661,6 +683,7 @@ export function handleMessageEnd(
   }
 
   const assistantMessage = msg;
+  beginDeclaredToolBatch(ctx.state, assistantMessage);
   const assistantPhase = resolveAssistantMessagePhase(assistantMessage);
   const suppressVisibleAssistantOutput = shouldSuppressAssistantVisibleOutput(assistantMessage);
   const suppressDeterministicApprovalOutput = shouldSuppressDeterministicApprovalOutput(ctx.state);

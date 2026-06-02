@@ -7,6 +7,7 @@
 
 import { formatHookErrorForLog } from "../hooks/fire-and-forget.js";
 import { formatErrorMessage } from "../infra/errors.js";
+import { formatNodeLog } from "../logging/node-log.js";
 import { concatOptionalTextSegments } from "../shared/text/join-segments.js";
 import type { GlobalHookRunnerRegistry, HookRunnerRegistry } from "./hook-registry.types.js";
 import type {
@@ -245,6 +246,16 @@ export function createHookRunner(
   registry: GlobalHookRunnerRegistry,
   options: HookRunnerOptions = {},
 ) {
+  const hookLogContextFields = (ctx: unknown) => {
+    if (!ctx || typeof ctx !== "object") {
+      return {};
+    }
+    const candidate = ctx as { runId?: unknown; sessionKey?: unknown };
+    return {
+      runId: typeof candidate.runId === "string" ? candidate.runId : undefined,
+      sessionKey: typeof candidate.sessionKey === "string" ? candidate.sessionKey : undefined,
+    };
+  };
   const logger = options.logger;
   const catchErrors = options.catchErrors ?? true;
   const failurePolicyByHook = options.failurePolicyByHook ?? {};
@@ -473,6 +484,14 @@ export function createHookRunner(
     }
 
     logger?.debug?.(`[hooks] running ${hookName} (${hooks.length} handlers)`);
+    console.log(
+      formatNodeLog({
+        id: "hook.start",
+        name: "执行插件Hook",
+        summary: "开始运行指定 hook",
+        fields: { ...hookLogContextFields(ctx), hook: String(hookName), handlers: hooks.length },
+      }),
+    );
 
     const promises = hooks.map(async (hook) => {
       try {
@@ -491,6 +510,19 @@ export function createHookRunner(
     });
 
     await Promise.all(promises);
+    console.log(
+      formatNodeLog({
+        id: "hook.done",
+        name: "插件Hook完成",
+        summary: "hook 执行结束，记录是否改写、阻断或放行",
+        fields: {
+          ...hookLogContextFields(ctx),
+          hook: String(hookName),
+          handlers: hooks.length,
+          status: "done",
+        },
+      }),
+    );
   }
 
   /**
@@ -509,6 +541,14 @@ export function createHookRunner(
     }
 
     logger?.debug?.(`[hooks] running ${hookName} (${hooks.length} handlers, sequential)`);
+    console.log(
+      formatNodeLog({
+        id: "hook.start",
+        name: "执行插件Hook",
+        summary: "开始运行指定 hook",
+        fields: { ...hookLogContextFields(ctx), hook: String(hookName), handlers: hooks.length },
+      }),
+    );
 
     let result: TResult | undefined;
 
@@ -540,6 +580,19 @@ export function createHookRunner(
       }
     }
 
+    console.log(
+      formatNodeLog({
+        id: "hook.done",
+        name: "插件Hook完成",
+        summary: "hook 执行结束，记录是否改写、阻断或放行",
+        fields: {
+          ...hookLogContextFields(ctx),
+          hook: String(hookName),
+          handlers: hooks.length,
+          status: result === undefined ? "pass" : "modified",
+        },
+      }),
+    );
     return result;
   }
 
@@ -591,6 +644,14 @@ export function createHookRunner(
     event: Parameters<NonNullable<PluginHookRegistration<K>["handler"]>>[0],
     ctx: Parameters<NonNullable<PluginHookRegistration<K>["handler"]>>[1],
   ): Promise<TResult | undefined> {
+    console.log(
+      formatNodeLog({
+        id: "hook.start",
+        name: "执行插件Hook",
+        summary: "开始运行指定 hook",
+        fields: { ...hookLogContextFields(ctx), hook: String(hookName), handlers: hooks.length },
+      }),
+    );
     for (const hook of hooks) {
       try {
         const promise = Promise.resolve(
@@ -599,6 +660,20 @@ export function createHookRunner(
         const timeoutMs = getClaimingHookTimeoutMs(hookName, hook);
         const handlerResult = timeoutMs ? await withHookTimeout(promise, timeoutMs) : await promise;
         if (handlerResult?.handled) {
+          console.log(
+            formatNodeLog({
+              id: "hook.done",
+              name: "插件Hook完成",
+              summary: "hook 执行结束，记录是否改写、阻断或放行",
+              fields: {
+                ...hookLogContextFields(ctx),
+                hook: String(hookName),
+                handlers: hooks.length,
+                status: "handled",
+                plugin: hook.pluginId,
+              },
+            }),
+          );
           return handlerResult;
         }
       } catch (err) {
@@ -606,6 +681,19 @@ export function createHookRunner(
       }
     }
 
+    console.log(
+      formatNodeLog({
+        id: "hook.done",
+        name: "插件Hook完成",
+        summary: "hook 执行结束，记录是否改写、阻断或放行",
+        fields: {
+          ...hookLogContextFields(ctx),
+          hook: String(hookName),
+          handlers: hooks.length,
+          status: "pass",
+        },
+      }),
+    );
     return undefined;
   }
 

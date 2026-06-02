@@ -99,6 +99,7 @@ describe("dispatchReplyFromConfig reply_dispatch hook", () => {
       ctx: createHookCtx(),
       cfg: emptyConfig,
       dispatcher: createDispatcher(),
+      replyOptions: { runId: "run-reply-dispatch" },
       fastAbortResolver: async () => ({ handled: false, aborted: false }),
       formatAbortReplyTextResolver: () => "⚙️ Agent was aborted.",
       replyResolver: async () => ({ text: "model reply" }),
@@ -110,11 +111,14 @@ describe("dispatchReplyFromConfig reply_dispatch hook", () => {
     });
     expect(hookMocks.runner.runReplyDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
+        runId: "run-reply-dispatch",
         sessionKey: "agent:test:session",
         sendPolicy: "allow",
         inboundAudio: false,
       }),
       expect.objectContaining({
+        runId: "run-reply-dispatch",
+        sessionKey: "agent:test:session",
         cfg: emptyConfig,
       }),
     );

@@ -1,5 +1,6 @@
 import type { AgentMessage, StreamFn } from "@mariozechner/pi-agent-core";
 import { streamSimple } from "@mariozechner/pi-ai";
+import { formatNodeLog, previewRedactedLogValue } from "../../../logging/node-log.js";
 import { visitObjectContentBlocks } from "../../../shared/message-content-blocks.js";
 import { normalizeLowercaseStringOrEmpty } from "../../../shared/string-coerce.js";
 import { validateAnthropicTurns, validateGeminiTurns } from "../../pi-embedded-helpers.js";
@@ -19,6 +20,11 @@ type UnknownToolLoopGuardState = {
   lastUnknownToolName?: string;
   count: number;
   countedMessages: WeakSet<object>;
+};
+
+type ToolCallNodeLogContext = {
+  runId?: string;
+  sessionKey?: string;
 };
 
 function resolveCaseInsensitiveAllowedToolName(
@@ -191,7 +197,7 @@ function looksLikeMalformedToolNameCounter(rawName: string): boolean {
   );
 }
 
-// 步骤6：解析 LLM 返回的 tool_use/function_call（函数调用）意图，将原始 Tool 名称标准化后分派到具体的执行器
+// 工具意图解析：标准化 LLM 返回的 tool_use/function_call 名称并分派执行器。
 // 注意：此函数被流处理+历史修复双路径调用，日志移到上层调用点（stream wrapper）避免历史遍历刷屏
 function normalizeToolCallNameForDispatch(
   rawName: string,
@@ -222,7 +228,7 @@ function normalizeToolCallNameForDispatch(
   return resolveStructuredAllowedToolName(trimmed, allowedToolNames) ?? trimmed;
 }
 
-// 步骤4.5/6: 流式意图解析 —— 识别从 LLM 返回的 content block（内容块）中是否包含
+// 流式工具意图解析：识别 LLM 返回的 content block 中是否包含
 // function_call/tool_use/toolCall 标识，触发工具分发逻辑
 // 注意：此函数被内层流循环大量调用，日志移到上层调用点以避免碎片重复
 function isToolCallBlockType(type: unknown): boolean {
@@ -777,7 +783,12 @@ function guardUnknownToolLoopInMessage(
 function wrapStreamTrimToolCallNames(
   stream: ReturnType<typeof streamSimple>,
   allowedToolNames?: Set<string>,
-  options?: { unknownToolThreshold?: number; state?: UnknownToolLoopGuardState },
+  options?: {
+    unknownToolThreshold?: number;
+    state?: UnknownToolLoopGuardState;
+    runId?: string;
+    sessionKey?: string;
+  },
 ): ReturnType<typeof streamSimple> {
   const unknownToolGuardState = options?.state ?? {
     count: 0,
@@ -794,14 +805,82 @@ function wrapStreamTrimToolCallNames(
       countAttempt: !streamAttemptAlreadyCounted,
       resetOnAllowedTool: true,
     });
-    // 步骤6：仅在当前流响应结束时（stream.result）打印 ToolCall 意图，避免历史遍历刷屏
-    if (message && typeof message === 'object') {
+    if (message && typeof message === "object") {
       const content = (message as { content?: unknown[] }).content;
       if (Array.isArray(content)) {
-        const toolBlock = content.find(b => b && typeof b === 'object' && isToolCallBlockType((b as { type?: unknown }).type));
-        if (toolBlock) {
-          const tb = toolBlock as { name?: string; id?: string };
-          console.log(`[agent] [agent-step-toolcall-detect][ToolCall检测] tool call detected / LLM 流式响应结束，检测到 ToolCall 请求 toolName=${tb.name ?? 'unknown'} toolCallId=${tb.id ?? 'unknown'}`);
+        const toolBlocks = content.filter(
+          (block) =>
+            block &&
+            typeof block === "object" &&
+            isToolCallBlockType((block as { type?: unknown }).type),
+        );
+        if (toolBlocks.length > 0) {
+          const toolNames = toolBlocks
+            .map((block) => {
+              const rawName = (block as { name?: unknown }).name;
+              return typeof rawName === "string" && rawName.trim() ? rawName.trim() : "unknown";
+            })
+            .join(",");
+          console.log(
+            formatNodeLog({
+              id: "tool.batch.detect",
+              name: "检测工具调用",
+              summary: "本轮模型请求执行工具",
+              fields: {
+                runId: options?.runId,
+                sessionKey: options?.sessionKey,
+                toolCalls: toolBlocks.length,
+                tools: toolNames,
+              },
+            }),
+          );
+          console.log(
+            formatNodeLog({
+              id: "tool.batch.start",
+              name: "开始工具批次",
+              summary: "执行当前 assistant message 请求的一组工具",
+              fields: {
+                runId: options?.runId,
+                sessionKey: options?.sessionKey,
+                toolCalls: toolBlocks.length,
+                tools: toolNames,
+              },
+            }),
+          );
+          for (const toolBlock of toolBlocks) {
+            const tb = toolBlock as {
+              name?: string;
+              id?: string;
+              input?: unknown;
+              arguments?: unknown;
+            };
+            const paramsRaw = tb.input ?? tb.arguments;
+            const paramsSerialized =
+              typeof paramsRaw === "string"
+                ? paramsRaw
+                : (() => {
+                    try {
+                      return JSON.stringify(paramsRaw);
+                    } catch {
+                      return String(paramsRaw);
+                    }
+                  })();
+            console.log(
+              formatNodeLog({
+                id: "model.tool_choice",
+                name: "模型选择工具",
+                summary: "LLM 返回 tool_call，准备执行本地工具",
+                fields: {
+                  runId: options?.runId,
+                  sessionKey: options?.sessionKey,
+                  tool: tb.name ?? "unknown",
+                  callId: tb.id ?? "unknown",
+                  paramsPreview: previewRedactedLogValue(paramsRaw ?? "", 120),
+                  paramsChars: paramsSerialized?.length ?? 0,
+                },
+              }),
+            );
+          }
         }
       }
     }
@@ -838,7 +917,7 @@ function wrapStreamTrimToolCallNames(
 export function wrapStreamFnTrimToolCallNames(
   baseFn: StreamFn,
   allowedToolNames?: Set<string>,
-  guardOptions?: { unknownToolThreshold?: number },
+  guardOptions?: { unknownToolThreshold?: number } & ToolCallNodeLogContext,
 ): StreamFn {
   const unknownToolGuardState: UnknownToolLoopGuardState = {
     count: 0,
@@ -851,12 +930,16 @@ export function wrapStreamFnTrimToolCallNames(
         wrapStreamTrimToolCallNames(stream, allowedToolNames, {
           unknownToolThreshold: guardOptions?.unknownToolThreshold,
           state: unknownToolGuardState,
+          runId: guardOptions?.runId,
+          sessionKey: guardOptions?.sessionKey,
         }),
       );
     }
     return wrapStreamTrimToolCallNames(maybeStream, allowedToolNames, {
       unknownToolThreshold: guardOptions?.unknownToolThreshold,
       state: unknownToolGuardState,
+      runId: guardOptions?.runId,
+      sessionKey: guardOptions?.sessionKey,
     });
   };
 }

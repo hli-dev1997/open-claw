@@ -286,7 +286,7 @@ function normalizeResolvedModel(params: {
   });
 }
 
-// 步骤5.1：构建 API 请求的传输层 —— 解析 Base URL、Headers、API 协议类型
+// 模型传输准备：解析 Base URL、Headers、API 协议类型。
 // 用于后续实际调用 LLM 时构造 HTTP 请求（URL、Headers、Body）
 function resolveProviderTransport(params: {
   provider: string;
@@ -1024,7 +1024,7 @@ export function resolveModel(
   };
 }
 
-// 步骤5：解析并调用底层 LLM 大语言模型 API
+// 模型调用入口：解析并调用底层 LLM API。
 // 通过 Provider（供应商）+ ModelId（模型ID）查找到对应的 Model 实例
 // 包含模型发现（Models Discovery）、动态模型解析、Auth 认证等
 export async function resolveModelAsync(
@@ -1046,7 +1046,6 @@ export async function resolveModelAsync(
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
 }> {
-  console.log(`[agent] [agent-step-model-resolve][模型解析] resolve LLM model / 解析并调用底层 LLM 大语言模型 API（动态模型发现+Auth 认证） provider=${provider} model=${modelId}`);
   const normalizedRef = {
     provider,
     model: normalizeStaticProviderModelId(normalizeProviderId(provider), modelId),

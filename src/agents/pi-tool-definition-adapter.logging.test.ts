@@ -1,6 +1,6 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "typebox";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   logDebug: vi.fn(),
@@ -36,7 +36,11 @@ describe("pi tool definition adapter logging", () => {
     mocks.logDebug.mockReset();
   });
 
-  it("logs raw malformed edit params when required aliases are missing", async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("logs summarized malformed edit params when required aliases are missing", async () => {
     const baseTool = {
       name: "edit",
       label: "Edit",
@@ -66,12 +70,12 @@ describe("pi tool definition adapter logging", () => {
 
     expect(logError).toHaveBeenCalledWith(
       expect.stringContaining(
-        '[tools] edit failed: Missing required parameter: edits (received: path). Supply correct parameters before retrying. raw_params={"path":"notes.txt"}',
+        '[tools] edit failed: Missing required parameter: edits (received: path). Supply correct parameters before retrying. paramsPreview={"path":"notes.txt"} paramsChars=20',
       ),
     );
   });
 
-  it("does not log raw params for intentional before_tool_call blocks", async () => {
+  it("does not log params for intentional before_tool_call blocks", async () => {
     const baseTool = {
       name: "bash",
       label: "Bash",
@@ -83,7 +87,10 @@ describe("pi tool definition adapter logging", () => {
         throw new BeforeToolCallBlockedError("blocked by policy");
       },
     } satisfies AgentTool;
-    const [def] = toToolDefinitions([baseTool]);
+    const [def] = toToolDefinitions([baseTool], {
+      runId: "run-fetch-1",
+      sessionKey: "agent:main:webchat",
+    });
     if (!def) {
       throw new Error("missing tool definition");
     }
@@ -107,8 +114,10 @@ describe("pi tool definition adapter logging", () => {
     );
     expect(logError).not.toHaveBeenCalled();
     expect(mocks.logDebug).toHaveBeenCalledWith(
-      "tools: exec blocked by before_tool_call: blocked by policy",
+      expect.stringContaining("[tool.call.policy_denied]"),
     );
+    expect(mocks.logDebug).toHaveBeenCalledWith(expect.stringContaining("reasonPreview"));
+    expect(mocks.logDebug).not.toHaveBeenCalledWith(expect.stringContaining("secret-value"));
   });
 
   it("accepts nested edits arrays for the current edit schema", async () => {
@@ -150,5 +159,52 @@ describe("pi tool definition adapter logging", () => {
 
     expect(execute).toHaveBeenCalledWith("call-edit-batch", payload, undefined, undefined);
     expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("logs summarized tool size and result instead of full raw payloads", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const execute = vi.fn(async () => ({
+      content: [{ type: "text" as const, text: "done" }],
+      details: { ok: true, token: "sk-secret-tool-result" },
+    }));
+    const baseTool = {
+      name: "web_fetch",
+      label: "Fetch",
+      description: "fetches URLs",
+      parameters: Type.Object({
+        url: Type.String(),
+      }),
+      execute,
+    } satisfies AgentTool;
+    const [def] = toToolDefinitions([baseTool], {
+      runId: "run-fetch-1",
+      sessionKey: "agent:main:webchat",
+    });
+    if (!def) {
+      throw new Error("missing tool definition");
+    }
+
+    await def.execute(
+      "call-fetch-1",
+      { url: "https://example.com/path", apiKey: "sk-secret-tool-param" },
+      undefined,
+      undefined,
+      extensionContext,
+    );
+
+    const logs = consoleLog.mock.calls.map((call) => String(call[0]));
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("[tool.call.start] 执行工具"),
+        expect.stringContaining("[tool.call.done] 工具完成"),
+      ]),
+    );
+    expect(logs.find((line) => line.includes("[tool.call.start]"))).toContain("paramsChars=");
+    expect(logs.find((line) => line.includes("[tool.call.start]"))).toContain(
+      'runId="run-fetch-1"',
+    );
+    expect(logs.find((line) => line.includes("[tool.call.done]"))).toContain('runId="run-fetch-1"');
+    expect(logs.join("\n")).not.toContain("sk-secret-tool-param");
+    expect(logs.join("\n")).not.toContain("sk-secret-tool-result");
   });
 });
