@@ -52,6 +52,8 @@ describe("model catalog normalization", () => {
                 },
                 compat: {
                   supportsTools: true,
+                  toolCallMode: "prompt-json",
+                  maxTokensField: "maxTokens",
                   supportsStore: "yes",
                   unknownFlag: true,
                 },
@@ -137,6 +139,8 @@ describe("model catalog normalization", () => {
               },
               compat: {
                 supportsTools: true,
+                toolCallMode: "prompt-json",
+                maxTokensField: "maxTokens",
               },
               status: "preview",
               statusReason: "rolling out",

@@ -98,6 +98,12 @@ function hasTransportOverrides(model: Model<Api>): boolean {
   return Boolean(request?.proxy || request?.tls);
 }
 
+function requiresBoundaryTransport(model: Model<Api>): boolean {
+  const compat = model.compat as { toolCallMode?: unknown } | undefined;
+  // 解决tool兼容问题：prompt-json 必须走 OpenClaw transport 才能删除原生 tools 字段并解析文本工具调用。
+  return model.api === "openai-completions" && compat?.toolCallMode === "prompt-json";
+}
+
 export function isTransportAwareApiSupported(api: Api): boolean {
   return SUPPORTED_TRANSPORT_APIS.has(api);
 }
@@ -106,11 +112,12 @@ export function resolveTransportAwareSimpleApi(api: Api): Api | undefined {
   return SIMPLE_TRANSPORT_API_ALIAS[api];
 }
 
+// 核心执行链路断点17：选择 provider transport stream；观察 model、api、transport 类型；掌握标准：能说明模型配置如何映射到具体请求实现。
 export function createTransportAwareStreamFnForModel(
   model: Model<Api>,
   ctx?: ProviderTransportStreamContext,
 ): StreamFn | undefined {
-  if (!hasTransportOverrides(model)) {
+  if (!hasTransportOverrides(model) && !requiresBoundaryTransport(model)) {
     return undefined;
   }
   if (!isTransportAwareApiSupported(model.api)) {

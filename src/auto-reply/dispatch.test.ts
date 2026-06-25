@@ -39,10 +39,12 @@ vi.mock("../hooks/message-hook-mappers.js", () => ({
     channelId?: string;
     accountId?: string;
     conversationId?: string;
+    runId?: string;
   }) => ({
     channelId: canonical.channelId,
     accountId: canonical.accountId,
     conversationId: canonical.conversationId,
+    runId: canonical.runId,
   }),
 }));
 
@@ -232,6 +234,7 @@ describe("withReplyDispatcher", () => {
       dispatcherOptions: {
         deliver: async () => undefined,
       },
+      replyOptions: { runId: "run-message-sending" },
       replyResolver: async () => ({ text: "ok" }),
     });
 
@@ -250,6 +253,7 @@ describe("withReplyDispatcher", () => {
         channelId: "threads",
         accountId: "acct-1",
         conversationId: "conv-1",
+        runId: "run-message-sending",
       },
     );
   });

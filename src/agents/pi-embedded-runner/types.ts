@@ -120,6 +120,8 @@ export type EmbeddedRunFailureSignal = {
 
 export type EmbeddedPiRunMeta = {
   durationMs: number;
+  /** Number of outbound model requests, including tool-result continuation requests. */
+  modelCalls?: number;
   agentMeta?: EmbeddedPiAgentMeta;
   aborted?: boolean;
   systemPromptReport?: SessionSystemPromptReport;
@@ -172,6 +174,8 @@ export type EmbeddedPiRunResult = {
   // True if a messaging tool successfully sent a message.
   // Used to suppress agent's confirmation text.
   didSendViaMessagingTool?: boolean;
+  // True if deterministic exec approval pending prompt was sent.
+  didSendDeterministicApprovalPrompt?: boolean;
   // Texts successfully sent via messaging tools during the run.
   messagingToolSentTexts?: string[];
   // Media URLs successfully sent via messaging tools during the run.

@@ -338,6 +338,7 @@ export type PluginHookBeforeDispatchEvent = {
 };
 
 export type PluginHookBeforeDispatchContext = {
+  runId?: string;
   channelId?: string;
   accountId?: string;
   conversationId?: string;
@@ -370,6 +371,8 @@ export type PluginHookReplyDispatchEvent = {
 };
 
 export type PluginHookReplyDispatchContext = {
+  runId?: string;
+  sessionKey?: string;
   cfg: OpenClawConfig;
   dispatcher: ReplyDispatcher;
   abortSignal?: AbortSignal;

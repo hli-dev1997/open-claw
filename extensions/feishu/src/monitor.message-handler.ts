@@ -158,6 +158,7 @@ function resolveFeishuDebounceMentions(params: {
   return botMentions.length > 0 ? botMentions : undefined;
 }
 
+// 核心执行链路断点02：创建 Feishu 消息接收 handler；观察 runtime、cfg、accountId、chatHistories；掌握标准：能说明收到 Feishu event 后由哪个 handler 接管。
 export function createFeishuMessageReceiveHandler({
   cfg,
   core,
@@ -182,6 +183,8 @@ export function createFeishuMessageReceiveHandler({
   const error = runtime?.error ?? console.error;
   const enqueue = createSequentialQueue();
 
+  //todo 要了解一下基本语法，然后把这些参数都搞清楚是什么含义。让codex加一下注释吧
+  // 核心执行链路断点03：分发 Feishu 消息事件；观察 event、botOpenId、botName、processingClaim；掌握标准：能说明事件去重、排队、最终进入业务处理的过程。
   const dispatchFeishuMessage = async (event: FeishuMessageEvent) => {
     const sequentialKey = resolveSequentialKey({
       accountId,

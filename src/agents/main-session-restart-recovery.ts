@@ -41,6 +41,10 @@ function sessionIdFromLockPath(lockPath: string): string | undefined {
   return sessionId || undefined;
 }
 
+function isRecoverableInterruptedLock(lock: SessionLockInspection): boolean {
+  return !lock.pidAlive || lock.staleReasons.includes("recycled-pid");
+}
+
 function getMessageRole(message: unknown): string | undefined {
   if (!message || typeof message !== "object") {
     return undefined;
@@ -159,6 +163,7 @@ export async function markRestartAbortedMainSessionsFromLocks(params: {
   const result = { marked: 0, skipped: 0 };
   const interruptedSessionIds = new Set(
     params.cleanedLocks
+      .filter(isRecoverableInterruptedLock)
       .map((lock) => sessionIdFromLockPath(lock.lockPath))
       .filter((sessionId): sessionId is string => Boolean(sessionId)),
   );

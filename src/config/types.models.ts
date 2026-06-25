@@ -27,7 +27,6 @@ type SupportedOpenAICompatFields = Pick<
   | "supportsReasoningEffort"
   | "supportsUsageInStreaming"
   | "supportsStrictMode"
-  | "maxTokensField"
   | "requiresToolResultName"
   | "requiresAssistantAfterToolResult"
   | "requiresThinkingAsText"
@@ -58,10 +57,13 @@ export type ModelCompatConfig = SupportedOpenAICompatFields &
   SupportedOpenAIResponsesCompatFields &
   SupportedAnthropicMessagesCompatFields & {
     thinkingFormat?: SupportedThinkingFormat;
+    maxTokensField?: NonNullable<OpenAICompletionsCompat["maxTokensField"]> | "maxTokens";
     supportedReasoningEfforts?: string[];
     reasoningEffortMap?: Record<string, string>;
     visibleReasoningDetailTypes?: string[];
     supportsTools?: boolean;
+    // 解决tool兼容问题：公司 OpenAI-compatible 接口不支持原生 tools 字段时，用 prompt-json 走文本工具协议。
+    toolCallMode?: "native" | "prompt-json";
     supportsPromptCacheKey?: boolean;
     requiresStringContent?: boolean;
     toolSchemaProfile?: string;

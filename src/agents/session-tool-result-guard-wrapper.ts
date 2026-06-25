@@ -89,6 +89,7 @@ function redactTranscriptMessage(message: AgentMessage, cfg?: OpenClawConfig): A
 export function guardSessionManager(
   sessionManager: SessionManager,
   opts?: {
+    runId?: string;
     agentId?: string;
     sessionKey?: string;
     config?: OpenClawConfig;
@@ -154,6 +155,7 @@ export function guardSessionManager(
     : undefined;
 
   const guard = installSessionToolResultGuard(sessionManager, {
+    runId: opts?.runId,
     sessionKey: opts?.sessionKey,
     transformMessageForPersistence: (message) =>
       applyInputProvenanceToUserMessage(message, opts?.inputProvenance),

@@ -12,7 +12,9 @@ import {
   emitAgentItemEvent,
   emitAgentPatchSummaryEvent,
 } from "../infra/agent-events.js";
+import { buildExecApprovalPendingReplyPayload } from "../infra/exec-approval-pending-reply.js";
 import type { ExecApprovalDecision } from "../infra/exec-approvals.js";
+import { formatNodeLog, previewRedactedLogValue } from "../logging/node-log.js";
 import type { PluginHookAfterToolCallEvent } from "../plugins/types.js";
 import { normalizeOptionalLowercaseString, readStringValue } from "../shared/string-coerce.js";
 import type { ApplyPatchSummary } from "./apply-patch.js";
@@ -52,22 +54,42 @@ let mediaParseModulePromise: Promise<MediaParseModule> | undefined;
 let beforeToolCallModulePromise: Promise<BeforeToolCallModule> | undefined;
 
 function loadExecApprovalReply(): Promise<ExecApprovalReplyModule> {
-  execApprovalReplyModulePromise ??= import("../infra/exec-approval-reply.js");
+  if (!execApprovalReplyModulePromise) {
+    execApprovalReplyModulePromise = import("../infra/exec-approval-reply.js").catch((err) => {
+      execApprovalReplyModulePromise = undefined;
+      throw err;
+    });
+  }
   return execApprovalReplyModulePromise;
 }
 
 function loadHookRunnerGlobal(): Promise<HookRunnerGlobalModule> {
-  hookRunnerGlobalModulePromise ??= import("../plugins/hook-runner-global.js");
+  if (!hookRunnerGlobalModulePromise) {
+    hookRunnerGlobalModulePromise = import("../plugins/hook-runner-global.js").catch((err) => {
+      hookRunnerGlobalModulePromise = undefined;
+      throw err;
+    });
+  }
   return hookRunnerGlobalModulePromise;
 }
 
 function loadMediaParse(): Promise<MediaParseModule> {
-  mediaParseModulePromise ??= import("../media/parse.js");
+  if (!mediaParseModulePromise) {
+    mediaParseModulePromise = import("../media/parse.js").catch((err) => {
+      mediaParseModulePromise = undefined;
+      throw err;
+    });
+  }
   return mediaParseModulePromise;
 }
 
 function loadBeforeToolCall(): Promise<BeforeToolCallModule> {
-  beforeToolCallModulePromise ??= import("./pi-tools.before-tool-call.js");
+  if (!beforeToolCallModulePromise) {
+    beforeToolCallModulePromise = import("./pi-tools.before-tool-call.js").catch((err) => {
+      beforeToolCallModulePromise = undefined;
+      throw err;
+    });
+  }
   return beforeToolCallModulePromise;
 }
 
@@ -478,7 +500,6 @@ async function emitToolResultOutput(params: {
     }
     ctx.state.deterministicApprovalPromptPending = true;
     try {
-      const { buildExecApprovalPendingReplyPayload } = await loadExecApprovalReply();
       await ctx.params.onToolResult(
         buildExecApprovalPendingReplyPayload({
           approvalId: approvalPending.approvalId,
@@ -493,7 +514,8 @@ async function emitToolResultOutput(params: {
         }),
       );
       ctx.state.deterministicApprovalPromptSent = true;
-    } catch {
+    } catch (err) {
+      ctx.log.warn(`Failed to emit deterministic exec approval pending payload: ${String(err)}`);
       ctx.state.deterministicApprovalPromptSent = false;
     } finally {
       ctx.state.deterministicApprovalPromptPending = false;
@@ -520,7 +542,10 @@ async function emitToolResultOutput(params: {
         }),
       );
       ctx.state.deterministicApprovalPromptSent = true;
-    } catch {
+    } catch (err) {
+      ctx.log.warn(
+        `Failed to emit deterministic exec approval unavailable payload: ${String(err)}`,
+      );
       ctx.state.deterministicApprovalPromptSent = false;
     } finally {
       ctx.state.deterministicApprovalPromptPending = false;
@@ -818,7 +843,39 @@ export async function handleToolExecutionEnd(
   const isError = evt.isError;
   const result = evt.result;
   const isToolError = isError || isToolResultError(result);
+  const execDetails = isExecToolName(toolName) ? readExecToolDetails(result) : null;
+  if (isToolError) {
+    ctx.state.toolFailureCount += 1;
+  }
+  const belongsToDeclaredBatch = ctx.state.pendingToolBatchCallIds.has(toolCallId);
+  if (belongsToDeclaredBatch) {
+    ctx.state.toolBatchHadError ||= isToolError;
+  }
   const sanitizedResult = sanitizeToolResult(result);
+  const resultText = extractToolResultText(sanitizedResult);
+  const resultForPreview = resultText ?? sanitizedResult;
+  const resultChars =
+    typeof resultForPreview === "string"
+      ? resultForPreview.length
+      : (JSON.stringify(resultForPreview)?.length ?? 0);
+  console.log(
+    formatNodeLog({
+      id: "tool.result.summary",
+      name: "工具结果摘要",
+      summary: "工具结果已生成并准备进入模型上下文",
+      fields: {
+        runId,
+        tool: toolName,
+        callId: toolCallId,
+        isError: isToolError,
+        execStatus: execDetails?.status,
+        exitCode:
+          execDetails && "exitCode" in execDetails ? execDetails.exitCode : undefined,
+        resultPreview: previewRedactedLogValue(resultForPreview, 120),
+        resultChars,
+      },
+    }),
+  );
   const toolStartKey = buildToolStartKey(runId, toolCallId);
   const startData = toolStartData.get(toolStartKey);
   toolStartData.delete(toolStartKey);
@@ -828,6 +885,25 @@ export async function handleToolExecutionEnd(
   ctx.state.toolMetas.push({ toolName, meta });
   ctx.state.toolMetaById.delete(toolCallId);
   ctx.state.toolSummaryById.delete(toolCallId);
+  if (belongsToDeclaredBatch) {
+    ctx.state.pendingToolBatchCallIds.delete(toolCallId);
+  }
+  if (belongsToDeclaredBatch && ctx.state.pendingToolBatchCallIds.size === 0) {
+    console.log(
+      formatNodeLog({
+        id: "tool.batch.done",
+        name: "工具批次完成",
+        summary: "本批工具结果已全部返回，可继续模型推理",
+        fields: {
+          runId,
+          lastTool: toolName,
+          lastCallId: toolCallId,
+          hasError: ctx.state.toolBatchHadError,
+        },
+      }),
+    );
+    ctx.state.toolBatchHadError = false;
+  }
   if (isToolError) {
     const errorMessage = extractToolErrorMessage(sanitizedResult);
     ctx.state.lastToolError = {

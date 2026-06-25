@@ -180,6 +180,78 @@ describe("subscribeEmbeddedPiSession", () => {
     });
   });
 
+  it("logs model.answer when visible assistant text first becomes available", () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { emit } = createSubscribedHarness({ runId: "run-visible-answer" });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "Weather is clear." }],
+      },
+    });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "Weather is clear." }],
+      },
+    });
+
+    const answerLogs = consoleLog.mock.calls
+      .map((call) => String(call[0]))
+      .filter((line) => line.includes("[model.answer]"));
+    expect(answerLogs).toHaveLength(1);
+    expect(answerLogs[0]).toContain('runId="run-visible-answer"');
+  });
+
+  it("logs tool.batch.done only after all assistant-declared sequential tools finish", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const { emit } = createSubscribedHarness({ runId: "run-sequential-batch" });
+
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "toolCall", id: "tool-a", name: "read", arguments: { path: "/tmp/a" } },
+          { type: "toolCall", id: "tool-b", name: "read", arguments: { path: "/tmp/b" } },
+        ],
+      },
+    });
+    emitToolRun({
+      emit,
+      toolName: "read",
+      toolCallId: "tool-a",
+      args: { path: "/tmp/a" },
+      isError: false,
+      result: { content: [{ type: "text", text: "alpha" }] },
+    });
+
+    await vi.waitFor(() => {
+      const logs = consoleLog.mock.calls.map((call) => String(call[0]));
+      expect(logs.filter((line) => line.includes("[tool.result.summary]"))).toHaveLength(1);
+    });
+    expect(consoleLog.mock.calls.map((call) => String(call[0])).join("\n")).not.toContain(
+      "[tool.batch.done]",
+    );
+
+    emitToolRun({
+      emit,
+      toolName: "read",
+      toolCallId: "tool-b",
+      args: { path: "/tmp/b" },
+      isError: false,
+      result: { content: [{ type: "text", text: "beta" }] },
+    });
+
+    await vi.waitFor(() => {
+      const logs = consoleLog.mock.calls.map((call) => String(call[0]));
+      expect(logs.filter((line) => line.includes("[tool.batch.done]"))).toHaveLength(1);
+    });
+  });
+
   it.each(THINKING_TAG_CASES)(
     "streams <%s> reasoning via onReasoningStream without leaking into final text",
     async ({ open, close }) => {

@@ -43,9 +43,11 @@ describe("wrapStreamFnWithDiagnosticModelCallEvents", () => {
 
   afterEach(() => {
     resetGlobalHookRunner();
+    vi.restoreAllMocks();
   });
 
   it("emits started and completed events for async streams", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     async function* stream() {
       yield { type: "text", text: "ok" };
     }
@@ -85,7 +87,11 @@ describe("wrapStreamFnWithDiagnosticModelCallEvents", () => {
     const events = await collectModelCallEvents(async () => {
       const returned = wrapped(
         {} as never,
-        {} as never,
+        {
+          systemPrompt: "system",
+          messages: [{ role: "user", content: "weather" }],
+          tools: [{ name: "weather" }],
+        } as never,
         {} as never,
       ) as unknown as typeof originalStream;
       expect(returned).not.toBe(originalStream);
@@ -118,6 +124,17 @@ describe("wrapStreamFnWithDiagnosticModelCallEvents", () => {
       timeToFirstByteMs: expect.any(Number),
     });
     expect(JSON.stringify(events)).not.toContain("sk-test-secret-value");
+    const nodeLogs = consoleLog.mock.calls.map((call) => String(call[0]));
+    expect(nodeLogs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('[model.request] 请求模型 | 发送本轮模型请求'),
+        expect.stringContaining("[model.response]"),
+      ]),
+    );
+    expect(nodeLogs.find((line) => line.includes("[model.request]"))).toContain(
+      'messages=1 tools=1 lastRole="user"',
+    );
+    expect(nodeLogs.join("\n")).not.toContain("sk-test-secret-value");
   });
 
   it("counts async onPayload replacements instead of raw payload content", async () => {

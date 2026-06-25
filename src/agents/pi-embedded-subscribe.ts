@@ -5,6 +5,7 @@ import { createStreamingDirectiveAccumulator } from "../auto-reply/reply/streami
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { formatToolAggregate } from "../auto-reply/tool-meta.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
+import { formatNodeLog, previewRedactedLogValue } from "../logging/node-log.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { InlineCodeState } from "../markdown/code-spans.js";
 import { buildCodeSpanIndex, createInlineCodeState } from "../markdown/code-spans.js";
@@ -113,7 +114,7 @@ function collectPendingMediaFromInternalEvents(
 
 export type { SubscribeEmbeddedPiSessionParams } from "./pi-embedded-subscribe.types.js";
 
-// 步骤7：订阅并监听 Agent Session 输出流，将结果或中间状态通过 Event Stream（事件流）推送回客户端
+// Agent 输出订阅：监听 session 输出流并通过 Event Stream 推送给客户端。
 // 处理 text_delta（文本增量）、thinking_delta（思考增量）、tool_result（工具结果）等事件
 // 通过 onBlockReply / onReasoningStream / onToolResult 等回调将流式数据传出
 export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionParams) {
@@ -127,6 +128,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     toolMetas: [],
     toolMetaById: new Map(),
     toolSummaryById: new Set(),
+    pendingToolBatchCallIds: new Set(),
+    toolBatchHadError: false,
+    toolFailureCount: 0,
     itemActiveIds: new Set(),
     itemStartedCount: 0,
     itemCompletedCount: 0,
@@ -193,6 +197,8 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     total: 0,
   };
   let compactionCount = 0;
+  let blockReplyFirstLogged = false;
+  let modelAnswerLogged = false;
 
   const assistantTexts = state.assistantTexts;
   const toolMetas = state.toolMetas;
@@ -223,7 +229,17 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
               assistantMessageIndex: options.assistantMessageIndex,
             })
           : payload;
-      console.log("[OpenClaw-Trace] 步骤7: 通过 onBlockReply 回调将文本块推送给客户端 | 文本前50字:", (payload?.text || "").slice(0, 50));
+      if (!blockReplyFirstLogged) {
+        blockReplyFirstLogged = true;
+        console.log(
+          formatNodeLog({
+            id: "agent.stream.first",
+            name: "首个流式回复",
+            summary: "LLM 文本开始推送给客户端",
+            fields: { runId: params.runId },
+          }),
+        );
+      }
       const maybeTask = params.onBlockReply(taggedPayload);
       if (!isPromiseLike<void>(maybeTask)) {
         return;
@@ -311,6 +327,21 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     }
     if (shouldSkipAssistantText(text)) {
       return;
+    }
+    if (!modelAnswerLogged) {
+      modelAnswerLogged = true;
+      console.log(
+        formatNodeLog({
+          id: "model.answer",
+          name: "模型开始回答",
+          summary: "收到首段可见 assistant 文本",
+          fields: {
+            runId: params.runId,
+            textPreview: previewRedactedLogValue(text, 120),
+            chars: text.length,
+          },
+        }),
+      );
     }
     assistantTexts.push(text);
     rememberAssistantText(text);
@@ -539,7 +570,6 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
       return;
     }
     try {
-      console.log("[OpenClaw-Trace] 步骤6.1: Tool 工具执行结果已返回，通过 onToolResult 推送 | toolName:", toolName, "结果前50字:", (cleanedText || "").slice(0, 50));
       void params.onToolResult({
         text: cleanedText,
         mediaUrls: filteredMediaUrls.length ? filteredMediaUrls : undefined,
@@ -866,6 +896,9 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     toolMetas.length = 0;
     toolMetaById.clear();
     toolSummaryById.clear();
+    state.pendingToolBatchCallIds.clear();
+    state.toolBatchHadError = false;
+    state.toolFailureCount = 0;
     state.itemActiveIds.clear();
     state.itemStartedCount = 0;
     state.itemCompletedCount = 0;
@@ -996,6 +1029,7 @@ export function subscribeEmbeddedPiSession(params: SubscribeEmbeddedPiSessionPar
     getMessagingToolSentTargets: () => messagingToolSentTargets.slice(),
     getPendingToolMediaReply: () => readPendingToolMediaReply(state),
     getSuccessfulCronAdds: () => state.successfulCronAdds,
+    getToolFailureCount: () => state.toolFailureCount,
     getReplayState: () => ({ ...state.replayState }),
     // Returns true if any messaging tool successfully sent a message.
     // Used to suppress agent's confirmation text (e.g., "Respondi no Telegram!")

@@ -190,6 +190,12 @@ function normalizeModelCatalogCompat(value: unknown): ModelCompatConfig | undefi
     }
   }
 
+  // 解决tool兼容问题：保留模型目录里的 toolCallMode，运行时才能知道要去掉原生 tools 字段。
+  const toolCallMode = normalizeOptionalString(value.toolCallMode) ?? "";
+  if (toolCallMode === "native" || toolCallMode === "prompt-json") {
+    compat.toolCallMode = toolCallMode;
+  }
+
   const stringListFields = [
     "visibleReasoningDetailTypes",
     "supportedReasoningEfforts",
@@ -214,7 +220,11 @@ function normalizeModelCatalogCompat(value: unknown): ModelCompatConfig | undefi
   }
 
   const maxTokensField = normalizeOptionalString(value.maxTokensField) ?? "";
-  if (maxTokensField === "max_completion_tokens" || maxTokensField === "max_tokens") {
+  if (
+    maxTokensField === "max_completion_tokens" ||
+    maxTokensField === "max_tokens" ||
+    maxTokensField === "maxTokens"
+  ) {
     compat.maxTokensField = maxTokensField;
   }
 

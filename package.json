@@ -1644,6 +1644,7 @@
     "proxy-agent": "^8.0.1",
     "qrcode": "1.5.4",
     "semver": "7.7.4",
+    "snowflake-id": "^1.1.0",
     "sqlite-vec": "0.1.9",
     "tar": "7.5.13",
     "tslog": "^4.10.2",

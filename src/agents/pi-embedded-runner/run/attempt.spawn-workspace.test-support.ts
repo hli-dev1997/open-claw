@@ -103,6 +103,7 @@ export function createSubscriptionMock(): SubscriptionMock {
     didSendViaMessagingTool: () => false,
     didSendDeterministicApprovalPrompt: () => false,
     getLastToolError: () => undefined,
+    getToolFailureCount: () => 0,
     getUsageTotals: () => undefined,
     getCompactionCount: () => 0,
     getLastCompactionTokensAfter: () => undefined,

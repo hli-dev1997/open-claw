@@ -6,6 +6,9 @@ export function createBaseToolHandlerState() {
     toolMetaById: new Map<string, unknown>(),
     toolMetas: [] as Array<{ toolName?: string; meta?: string }>,
     toolSummaryById: new Set<string>(),
+    pendingToolBatchCallIds: new Set<string>(),
+    toolBatchHadError: false,
+    toolFailureCount: 0,
     itemActiveIds: new Set<string>(),
     itemStartedCount: 0,
     itemCompletedCount: 0,
@@ -21,6 +24,7 @@ export function createBaseToolHandlerState() {
     messagingToolSentTextsNormalized: [] as string[],
     messagingToolSentMediaUrls: [] as string[],
     messagingToolSentTargets: [] as unknown[],
+    successfulCronAdds: 0,
     deterministicApprovalPromptSent: false,
     blockBuffer: "",
   };

@@ -540,6 +540,7 @@ export function buildFeishuPostMessagePayload(params: { messageText: string }): 
   };
 }
 
+// 核心执行链路断点26：发送普通文本回复到 Feishu；观察 chatId、message、accountId、send result；掌握标准：能说明 Agent 最终文本如何发回 Feishu。
 export async function sendMessageFeishu(
   params: SendFeishuMessageParams,
 ): Promise<FeishuSendResult> {
@@ -747,6 +748,7 @@ export function buildStructuredCard(
 /**
  * Send a message as a structured card with optional header and note.
  */
+// 核心执行链路断点27：发送结构化卡片回复到 Feishu；观察 card payload、chatId、messageId、accountId；掌握标准：能说明流式/卡片回复如何发回 Feishu。
 export async function sendStructuredCardFeishu(params: {
   cfg: ClawdbotConfig;
   to: string;

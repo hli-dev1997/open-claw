@@ -31,6 +31,9 @@ export type EmbeddedPiSubscribeState = {
   toolMetas: Array<{ toolName?: string; meta?: string }>;
   toolMetaById: Map<string, ToolCallSummary>;
   toolSummaryById: Set<string>;
+  pendingToolBatchCallIds: Set<string>;
+  toolBatchHadError: boolean;
+  toolFailureCount: number;
   itemActiveIds: Set<string>;
   itemStartedCount: number;
   itemCompletedCount: number;
@@ -191,6 +194,9 @@ export type ToolHandlerState = Pick<
   | "toolMetaById"
   | "toolMetas"
   | "toolSummaryById"
+  | "pendingToolBatchCallIds"
+  | "toolBatchHadError"
+  | "toolFailureCount"
   | "itemActiveIds"
   | "itemStartedCount"
   | "itemCompletedCount"

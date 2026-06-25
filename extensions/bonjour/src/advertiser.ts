@@ -389,7 +389,7 @@ export async function startGatewayBonjourAdvertiser(
       }
 
       if (classification.kind === "cancellation") {
-        logger.warn(`bonjour: suppressing ciao cancellation: ${classification.formatted}`);
+        logger.debug(`bonjour: suppressing ciao cancellation: ${classification.formatted}`);
         requestCiaoRecovery?.(classification);
       } else if (classification.kind === "interface-enumeration-failure") {
         // Restricted sandboxes can refuse os.networkInterfaces(); mDNS cannot
@@ -401,7 +401,7 @@ export async function startGatewayBonjourAdvertiser(
       } else {
         const label =
           classification.kind === "netmask-assertion" ? "netmask assertion" : "interface assertion";
-        logger.warn(`bonjour: suppressing ciao ${label}: ${classification.formatted}`);
+        logger.debug(`bonjour: suppressing ciao ${label}: ${classification.formatted}`);
         requestCiaoRecovery?.(classification);
       }
       return true;
@@ -502,13 +502,13 @@ export async function startGatewayBonjourAdvertiser(
         try {
           svc.on("name-change", (name: unknown) => {
             const next = typeof name === "string" ? name : String(name);
-            logger.warn(
+            logger.info(
               `bonjour: ${label} name conflict resolved; newName=${JSON.stringify(next)}`,
             );
           });
           svc.on("hostname-change", (nextHostname: unknown) => {
             const next = typeof nextHostname === "string" ? nextHostname : String(nextHostname);
-            logger.warn(
+            logger.info(
               `bonjour: ${label} hostname conflict resolved; newHostname=${JSON.stringify(next)}`,
             );
           });
@@ -623,7 +623,7 @@ export async function startGatewayBonjourAdvertiser(
           restoreCiaoExecHidePatch();
           return;
         }
-        logger.warn(`bonjour: restarting advertiser (${reason})`);
+        logger.debug(`bonjour: restarting advertiser (${reason})`);
         const previous = cycle;
         await stopCycle(previous);
         cycle = createCycle();
@@ -689,7 +689,7 @@ export async function startGatewayBonjourAdvertiser(
         }
         lastRepairAttempt.set(key, now);
 
-        logger.warn(
+        logger.debug(
           `bonjour: watchdog detected non-announced service; attempting re-advertise (${serviceSummary(
             label,
             svc,

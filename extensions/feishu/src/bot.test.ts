@@ -434,6 +434,40 @@ describe("handleFeishuMessage ACP routing", () => {
     expect(mockEnsureConfiguredBindingRouteReady).toHaveBeenCalledTimes(1);
   });
 
+  it("provides a fallback runtime to the reply dispatcher when omitted", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    try {
+      await handleFeishuMessage({
+        cfg: {
+          session: { mainKey: "main", scope: "per-sender" },
+          channels: { feishu: { enabled: true, allowFrom: ["ou_sender_1"], dmPolicy: "open" } },
+        },
+        event: {
+          sender: { sender_id: { open_id: "ou_sender_1" } },
+          message: {
+            message_id: "msg-fallback-runtime",
+            chat_id: "oc_dm",
+            chat_type: "p2p",
+            message_type: "text",
+            content: JSON.stringify({ text: "hello" }),
+          },
+        },
+      });
+    } finally {
+      logSpy.mockRestore();
+    }
+
+    expect(mockCreateFeishuReplyDispatcher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtime: expect.objectContaining({
+          log: expect.any(Function),
+          error: expect.any(Function),
+        }),
+      }),
+    );
+  });
+
   it("surfaces configured ACP initialization failures to the Feishu conversation", async () => {
     mockResolveConfiguredBindingRoute.mockReturnValue(createConfiguredFeishuRoute());
     mockEnsureConfiguredBindingRouteReady.mockResolvedValue(

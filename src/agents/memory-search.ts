@@ -427,7 +427,6 @@ export function resolveMemorySearchConfig(
   cfg: OpenClawConfig,
   agentId: string,
 ): ResolvedMemorySearchConfig | null {
-  const _memConfigStartedAt = Date.now();
   const defaults = cfg.agents?.defaults?.memorySearch;
   const overrides = resolveAgentConfig(cfg, agentId)?.memorySearch;
   const resolved = mergeConfig(cfg, defaults, overrides, agentId);
@@ -455,10 +454,6 @@ export function resolveMemorySearchConfig(
       'agents.*.memorySearch.multimodal does not support memorySearch.fallback. Set fallback to "none".',
     );
   }
-  // [TRACE][节点M1:记忆层-Memory检索配置] 记忆检索配置解析完毕
-  const _vectorEnabled = resolved.store?.vector?.enabled ?? false;
-  const _sourcesCount = Array.isArray(resolved.sources) ? resolved.sources.length : 0;
-  console.log(`[TRACE][节点M1:记忆层-Memory检索配置] vectorEnabled=${_vectorEnabled} sourcesCount=${_sourcesCount} elapsedMs=${Date.now() - _memConfigStartedAt}`);
   return resolved;
 }
 

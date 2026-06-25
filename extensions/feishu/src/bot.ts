@@ -265,6 +265,7 @@ export function parseFeishuMessageEvent(
   return ctx;
 }
 
+// 核心执行链路断点05：把 Feishu 消息构造成 Agent 请求 body；观察 rawText、textForAgent、agentId、session 信息；掌握标准：能说明外部消息如何转换成 Agent 可执行输入。
 export function buildFeishuAgentBody(params: {
   ctx: Pick<
     FeishuMessageContext,
@@ -380,6 +381,7 @@ function filterFetchedGroupContextMessages<
   }).items;
 }
 
+// 核心执行链路断点04：处理 Feishu 消息主入口；观察 event、cfg、accountId、message 内容、chat 类型；掌握标准：能说明私聊/群聊、权限、消息解析和 agent 路由逻辑。
 export async function handleFeishuMessage(params: {
   cfg: ClawdbotConfig;
   event: FeishuMessageEvent;
@@ -407,6 +409,7 @@ export async function handleFeishuMessage(params: {
 
   const log = runtime?.log ?? console.log;
   const error = runtime?.error ?? console.error;
+  const runtimeEnv = (runtime ?? { log, error }) as RuntimeEnv;
 
   const messageId = event.message.message_id;
   if (
@@ -1308,7 +1311,7 @@ export async function handleFeishuMessage(params: {
           const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
             cfg,
             agentId,
-            runtime: runtime as RuntimeEnv,
+            runtime: runtimeEnv,
             chatId: ctx.chatId,
             allowReasoningPreview,
             replyToMessageId: replyTargetMessageId,
@@ -1470,10 +1473,11 @@ export async function handleFeishuMessage(params: {
         storePath,
         sessionKey: route.sessionKey,
       });
+      // 核心执行链路断点06：创建 Feishu 回复 dispatcher；观察 chatId、messageId、accountId、replyOptions；掌握标准：能说明 Agent 输出最终如何回到 Feishu。
       const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
         cfg,
         agentId: route.agentId,
-        runtime: runtime as RuntimeEnv,
+        runtime: runtimeEnv,
         chatId: ctx.chatId,
         allowReasoningPreview,
         replyToMessageId: replyTargetMessageId,
@@ -1488,6 +1492,7 @@ export async function handleFeishuMessage(params: {
       });
 
       log(`feishu[${account.accountId}]: dispatching to agent (session=${route.sessionKey})`);
+      // 核心执行链路断点07：进入通用 channel turn 内核；观察 channel、ingest、resolveTurn、runDispatch；掌握标准：能说明 Feishu 插件如何交给 OpenClaw 通用消息回合处理。
       const turnResult = await core.channel.turn.run({
         channel: "feishu",
         accountId: route.accountId,

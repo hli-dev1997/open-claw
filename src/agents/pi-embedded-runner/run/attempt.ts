@@ -21,6 +21,7 @@ import { isEmbeddedMode } from "../../../infra/embedded-mode.js";
 import { formatErrorMessage } from "../../../infra/errors.js";
 import { resolveHeartbeatSummaryForAgent } from "../../../infra/heartbeat-summary.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
+import { formatNodeLog, previewLogValue } from "../../../logging/node-log.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { listRegisteredPluginAgentPromptGuidance } from "../../../plugins/command-registry-state.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
@@ -300,6 +301,7 @@ import {
 } from "./attempt.tool-call-argument-repair.js";
 import {
   sanitizeReplayToolCallIdsForStream,
+  wrapStreamFnConvertPromptJsonToolText,
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.tool-call-normalization.js";
@@ -363,6 +365,7 @@ export {
   wrapStreamFnRepairMalformedToolCallArguments,
 } from "./attempt.tool-call-argument-repair.js";
 export {
+  wrapStreamFnConvertPromptJsonToolText,
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.tool-call-normalization.js";
@@ -407,15 +410,18 @@ export function remapInjectedContextFilesToWorkspace(params: {
     return params.files;
   }
   return params.files.map((file) => {
-    const relative = path.relative(params.sourceWorkspaceDir, file.path);
-    const canRemap = relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+    // Use posix path logic: sandbox workspace paths are always POSIX-style
+    // regardless of the host OS, so path.relative would produce backslashes on Windows.
+    const src = params.sourceWorkspaceDir.replace(/\\/g, "/");
+    const target = params.targetWorkspaceDir.replace(/\\/g, "/");
+    const filePath = file.path.replace(/\\/g, "/");
+    const relative = path.posix.relative(src, filePath);
+    const canRemap =
+      relative === "" || (!relative.startsWith("..") && !path.posix.isAbsolute(relative));
     return canRemap
       ? {
           ...file,
-          path:
-            relative === ""
-              ? params.targetWorkspaceDir
-              : path.join(params.targetWorkspaceDir, relative),
+          path: relative === "" ? params.targetWorkspaceDir : path.posix.join(target, relative),
         }
       : file;
   });
@@ -647,6 +653,7 @@ function collectAttemptExplicitToolAllowlistSources(params: {
   ]);
 }
 
+// 核心执行链路断点14：嵌入式 Agent runner 主入口；观察 session、tools、model、streamFn、onToolResult；掌握标准：能说明模型调用、工具调用和结果回传在 runner 中如何组织。
 export async function runEmbeddedAttempt(
   params: EmbeddedRunAttemptParams,
 ): Promise<EmbeddedRunAttemptResult> {
@@ -665,7 +672,16 @@ export async function runEmbeddedAttempt(
       return;
     }
     const message = formatEmbeddedRunStageSummary(
-      `[trace:embedded-run] prep stages: runId=${params.runId} sessionId=${params.sessionId} phase=${phase}`,
+      formatNodeLog({
+        id: "agent.prep.summary",
+        name: "准备阶段摘要",
+        summary: "输出 workspace、tools、prompt、session 等阶段耗时",
+        fields: {
+          runId: params.runId,
+          sessionId: params.sessionId,
+          phase,
+        },
+      }),
       summary,
     );
     if (shouldWarn) {
@@ -732,11 +748,32 @@ export async function runEmbeddedAttempt(
       agentId: sessionAgentId,
     });
     prepStages.mark("skills");
-    // [TRACE][节点2.5:Skill系统提示注入]
     if (skillsPrompt) {
-      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt已注入 长度=${skillsPrompt.length} 内容预览="${skillsPrompt.slice(0, 400)}"`);
+      console.log(
+        formatNodeLog({
+          id: "agent.prompt.skills",
+          name: "注入Skills提示",
+          summary: "将 Skills prompt 注入系统提示",
+          fields: {
+            runId: params.runId,
+            sessionId: params.sessionId,
+            skillsPromptChars: skillsPrompt.length,
+          },
+        }),
+      );
     } else {
-      console.log(`[TRACE][节点2.5:注入层-Skill提示注入] skillsPrompt=null（无Skill注入）`);
+      console.log(
+        formatNodeLog({
+          id: "agent.prompt.skills",
+          name: "注入Skills提示",
+          summary: "当前会话无匹配 Skill，无需注入",
+          fields: {
+            runId: params.runId,
+            sessionId: params.sessionId,
+            skillsPromptChars: 0,
+          },
+        }),
+      );
     }
 
     const sessionLabel = params.sessionKey ?? params.sessionId;
@@ -786,7 +823,7 @@ export async function runEmbeddedAttempt(
         ...(err ? { errorCategory: diagnosticErrorCategory(err) } : {}),
       });
     };
-    // 步骤6：创建 Agent 可用工具集（Tool Calling/函数调用），包含 coding tools、消息发送、文件操作等
+    // 工具集构建：创建 Agent 可用工具集，包含 coding tools、消息发送、文件操作等。
     const toolsRaw =
       params.disableTools || isRawModelRun
         ? []
@@ -885,7 +922,7 @@ export async function runEmbeddedAttempt(
       bootstrapMode,
       sessionFile: params.sessionFile,
       hasCompletedBootstrapTurn,
-      // 步骤4.1：从 Session（会话）文件中读取历史对话记录
+      // 历史读取：从 session 文件中读取历史对话记录。
       resolveBootstrapContextForRun: async () =>
         await resolveBootstrapContextForRun({
           workspaceDir: resolvedWorkspace,
@@ -1201,7 +1238,7 @@ export async function runEmbeddedAttempt(
         context: promptContributionContext,
       });
 
-    // 步骤4.2：拼接 System Prompt（系统提示词）+ Context（上下文）+ 用户输入
+    // Prompt 构建：拼接 System Prompt、Context 和用户输入。
     const builtAppendPrompt =
       resolveSystemPromptOverride({
         config: params.config,
@@ -1293,6 +1330,23 @@ export async function runEmbeddedAttempt(
     });
     const systemPromptOverride = createSystemPromptOverride(appendPrompt);
     let systemPromptText = systemPromptOverride();
+    console.log(
+      formatNodeLog({
+        id: "agent.prompt.build",
+        name: "构建LLM上下文",
+        summary: "读取历史、系统提示、skills、memory 和工具定义",
+        fields: {
+          runId: params.runId,
+          sessionId: params.sessionId,
+          systemPromptChars: systemPromptText.length,
+          skillsPromptChars: skillsPrompt?.length ?? 0,
+          tools: effectiveTools.length,
+          contextFiles: contextFiles.length,
+          memorySection:
+            !activeContextEngine || activeContextEngine.info.id === "legacy" ? true : false,
+        },
+      }),
+    );
     const userPromptPrefixText = appendBootstrapFileToUserPromptPrefix({
       prefixText: bootstrapRouting.userPromptPrefixText,
       bootstrapMode,
@@ -1303,6 +1357,17 @@ export async function runEmbeddedAttempt(
     // Keep the session lock scoped to transcript/session mutations. Cold plugin
     // and tool setup can be slow, and holding the lock there blocks CLI fallback
     // from taking over the same session when a gateway run stalls before model I/O.
+    console.log(
+      formatNodeLog({
+        id: "session.lock.acquire",
+        name: "获取会话写锁",
+        summary: "准备读写 session transcript",
+        fields: {
+          runId: params.runId,
+          sessionId: params.sessionId,
+        },
+      }),
+    );
     const sessionLock = await acquireSessionWriteLock({
       sessionFile: params.sessionFile,
       maxHoldMs: resolveSessionLockMaxHoldFromTimeout({
@@ -1339,6 +1404,7 @@ export async function runEmbeddedAttempt(
 
       await prewarmSessionFile(params.sessionFile);
       sessionManager = guardSessionManager(SessionManager.open(params.sessionFile), {
+        runId: params.runId,
         agentId: sessionAgentId,
         sessionKey: params.sessionKey,
         config: params.config,
@@ -1431,9 +1497,11 @@ export async function runEmbeddedAttempt(
       const { customTools } = splitSdkTools({
         tools: effectiveTools,
         sandboxEnabled: !!sandbox?.enabled,
+        runId: params.runId,
+        sessionKey: params.sessionKey,
       });
 
-      // 步骤6：添加客户端 Tool（工具），用于解析 LLM 返回的 tool_use/function_call 意图
+      // 客户端工具桥接：解析 LLM 返回的 tool_use/function_call 意图。
       // Add client tools (OpenResponses hosted tools) to customTools
       let clientToolCallDetected: { name: string; params: Record<string, unknown> } | null = null;
       const clientToolLoopDetection = resolveToolLoopDetectionConfig({
@@ -1560,8 +1628,19 @@ export async function runEmbeddedAttempt(
         cfg: params.config,
         agentId: sessionAgentId,
       });
-      // [TRACE][节点3.2:执行层-ContextToken预算] 作用：Token 上下文预算和工具结果截断阈值计算完毕，是防止 context overflow 的第一道防线
-      console.log(`[TRACE][节点3.2:执行层-ContextToken预算] runId="${params.runId}" sessionId="${params.sessionId}" contextTokenBudget=${contextTokenBudgetForGuard} toolResultMaxChars=${toolResultMaxCharsForGuard}`);
+      console.log(
+        formatNodeLog({
+          id: "agent.prompt.budget",
+          name: "计算Token预算",
+          summary: "计算上下文预算和工具结果截断阈值",
+          fields: {
+            runId: params.runId,
+            sessionId: params.sessionId,
+            contextTokenBudget: contextTokenBudgetForGuard,
+            toolResultMaxChars: toolResultMaxCharsForGuard,
+          },
+        }),
+      );
       const midTurnPrecheckEnabled =
         params.config?.agents?.defaults?.compaction?.midTurnPrecheck?.enabled === true;
       let pendingMidTurnPrecheckRequest: MidTurnPrecheckRequest | null = null;
@@ -1738,6 +1817,7 @@ export async function runEmbeddedAttempt(
         wsApiKey,
         model: params.model,
       });
+      // 核心执行链路断点15：选择模型 stream 函数；观察 model.api、compat.toolCallMode、provider；掌握标准：能说明为什么公司 API 会走 OpenAI-compatible/prompt-json 链路。
       activeSession.agent.streamFn = resolveEmbeddedAgentStreamFn({
         currentStreamFn: defaultSessionStreamFn,
         providerStreamFn,
@@ -1947,11 +2027,19 @@ export async function runEmbeddedAttempt(
         allowedToolNames,
         transcriptPolicy,
       );
+      // 解决tool兼容问题：在工具派发前把文本 <tool_call> 兜底转回结构化 toolCall。
+      // 核心执行链路断点24：包装 runner streamFn 并转换 prompt-json 工具调用；观察 allowedToolNames、baseFn 输出、转换后的 message；掌握标准：能说明兼容层如何让 runner 识别公司 API 返回的工具调用。
+      activeSession.agent.streamFn = wrapStreamFnConvertPromptJsonToolText(
+        activeSession.agent.streamFn,
+        allowedToolNames,
+      );
       activeSession.agent.streamFn = wrapStreamFnTrimToolCallNames(
         activeSession.agent.streamFn,
         allowedToolNames,
         {
           unknownToolThreshold: resolveUnknownToolGuardThreshold(clientToolLoopDetection),
+          runId: params.runId,
+          sessionKey: params.sessionKey,
         },
       );
 
@@ -2231,6 +2319,7 @@ export async function runEmbeddedAttempt(
         getMessagingToolSentTargets,
         getPendingToolMediaReply,
         getSuccessfulCronAdds,
+        getToolFailureCount,
         getReplayState,
         didSendViaMessagingTool,
         getLastToolError,
@@ -2310,8 +2399,21 @@ export async function runEmbeddedAttempt(
             ) {
               timedOutDuringCompaction = true;
             }
-            // [ERROR][节点3.4:执行层-Compaction超时触发] 运行超时定时器触发，强制中止当前 Agent 执行
-            console.log(`[ERROR][节点3.4:执行层-Compaction超时触发] runId="${params.runId}" sessionId="${params.sessionId}" reason="${reason}" timedOutDuringCompaction=${timedOutDuringCompaction} timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
+            console.log(
+              formatNodeLog({
+                id: "agent.timeout.trigger",
+                name: "运行超时触发",
+                summary: "运行超时定时器触发，强制中止当前 Agent 执行",
+                fields: {
+                  runId: params.runId,
+                  sessionId: params.sessionId,
+                  reason,
+                  timedOutDuringCompaction,
+                  timeoutMs: params.timeoutMs,
+                  compactionTimeoutMs,
+                },
+              }),
+            );
             abortRun(true);
             if (!abortWarnTimer) {
               abortWarnTimer = setTimeout(() => {
@@ -2330,8 +2432,19 @@ export async function runEmbeddedAttempt(
         );
       };
       scheduleAbortTimer(params.timeoutMs, "initial");
-      // [TRACE][节点3.3:执行层-Compaction超时注册] 作用：初始超时定时器已注册，compactionTimeoutMs 为压缩期间的宽限延长时间
-      console.log(`[TRACE][节点3.3:执行层-Compaction超时注册] runId="${params.runId}" sessionId="${params.sessionId}" timeoutMs=${params.timeoutMs} compactionTimeoutMs=${compactionTimeoutMs}`);
+      console.log(
+        formatNodeLog({
+          id: "agent.timeout.register",
+          name: "注册运行超时",
+          summary: "注册 Agent timeout 和 compaction 宽限时间",
+          fields: {
+            runId: params.runId,
+            sessionId: params.sessionId,
+            timeoutMs: params.timeoutMs,
+            compactionTimeoutMs,
+          },
+        }),
+      );
 
       let messagesSnapshot: AgentMessage[] = [];
       let sessionIdUsed = activeSession.sessionId;
@@ -2888,10 +3001,60 @@ export async function runEmbeddedAttempt(
               messages: btwSnapshotMessages,
               inFlightPrompt: promptSubmission.prompt,
             });
-            // [TRACE][节点三:智能体调度器入口] 首次调用 LLM
             const _traceN3StartedAt = Date.now();
-            // 步骤6.1：反射执行具体的 Tool（工具）方法 —— LLM 内部多轮 tool calling 循环
-            console.log(`[TRACE][节点4.0:推理层-LLM推理入口] runId=${params.runId} provider=${params.provider} model=${params.modelId} contextMessages=${activeSession.messages.length} tools=${effectiveTools.length} prompt="${promptSubmission.prompt.slice(0, 200)}"`);
+            console.log(
+              formatNodeLog({
+                id: "agent.loop.start",
+                name: "开始推理循环",
+                summary: "调用模型，进入 LLM/tool 多轮循环",
+                fields: {
+                  runId: params.runId,
+                  provider: params.provider,
+                  model: params.modelId,
+                  contextMessages: activeSession.messages.length,
+                  tools: effectiveTools.length,
+                },
+              }),
+            );
+            console.log(
+              formatNodeLog({
+                id: "prompt.user.turn",
+                name: "注入用户回合",
+                summary: "用户原文进入 LLM user message",
+                fields: {
+                  runId: params.runId,
+                  textPreview: previewLogValue(promptSubmission.prompt, 120),
+                  chars: promptSubmission.prompt.length,
+                },
+              }),
+            );
+            console.log(
+              formatNodeLog({
+                id: "prompt.context.summary",
+                name: "上下文摘要",
+                summary: "输出历史、memory、tools、system prompt 的摘要信息",
+                fields: {
+                  runId: params.runId,
+                  historyMessages: activeSession.messages.length,
+                  memorySection:
+                    !activeContextEngine || activeContextEngine.info.id === "legacy" ? true : false,
+                  tools: effectiveTools.length,
+                  systemPromptChars: systemPromptText.length,
+                  contextFiles: contextFiles.length,
+                },
+              }),
+            );
+            log.debug(
+              formatNodeLog({
+                id: "model.request.debug",
+                name: "可用工具列表",
+                summary: "完整工具列表仅在 debug 日志中记录",
+                fields: {
+                  runId: params.runId,
+                  tools: effectiveTools.map((tool) => tool.name).join(","),
+                },
+              }),
+            );
             if (promptSubmission.runtimeOnly) {
               await abortable(activeSession.prompt(promptSubmission.prompt));
             } else {
@@ -2926,8 +3089,18 @@ export async function runEmbeddedAttempt(
                 }
               }
             }
-            // [TRACE][节点6.0:推理层-LLM推理出口] LLM 多轮思考结束，退出 prompt()
-            console.log(`[TRACE][节点6.0:推理层-LLM推理出口] runId=${params.runId} totalMessages=${activeSession.messages.length} elapsedMs=${Date.now() - _traceN3StartedAt}`);
+            console.log(
+              formatNodeLog({
+                id: "agent.loop.done",
+                name: "推理循环结束",
+                summary: "LLM/tool 多轮循环完成",
+                fields: {
+                  runId: params.runId,
+                  totalMessages: activeSession.messages.length,
+                  elapsedMs: Date.now() - _traceN3StartedAt,
+                },
+              }),
+            );
           }
         } catch (err) {
           yieldAborted =
@@ -3434,6 +3607,7 @@ export async function runEmbeddedAttempt(
         replayMetadata,
         itemLifecycle: getItemLifecycle(),
         setTerminalLifecycleMeta,
+        modelCalls: diagnosticModelCallSeq,
         aborted,
         externalAbort,
         timedOut,
@@ -3452,6 +3626,7 @@ export async function runEmbeddedAttempt(
         messagesSnapshot,
         assistantTexts,
         toolMetas: toolMetasNormalized,
+        toolFailureCount: getToolFailureCount(),
         lastAssistant,
         currentAttemptAssistant,
         lastToolError: getLastToolError?.(),
@@ -3517,6 +3692,17 @@ export async function runEmbeddedAttempt(
           bundleLspRuntime,
           sessionLock,
         });
+        console.log(
+          formatNodeLog({
+            id: "session.lock.release",
+            name: "释放会话写锁",
+            summary: "session transcript 写入完成",
+            fields: {
+              runId: params.runId,
+              sessionId: params.sessionId,
+            },
+          }),
+        );
       } catch (err) {
         cleanupError = err;
       }

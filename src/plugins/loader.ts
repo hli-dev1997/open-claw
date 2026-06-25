@@ -2147,7 +2147,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     if (shouldActivate && options.mode !== "validate") {
       const failedPlugins = registry.plugins.filter((plugin) => plugin.failedAt != null);
       if (failedPlugins.length > 0) {
-        logger.warn(
+        logger.debug?.(
           `[plugins] ${failedPlugins.length} plugin(s) failed to initialize (${formatPluginFailureSummary(
             failedPlugins,
           )}). Run 'openclaw plugins list' for details.`,

@@ -151,4 +151,38 @@ describe("provider transport stream contracts", () => {
     expect(buildTransportAwareSimpleStreamFn(model)).toBeUndefined();
     expect(prepareTransportAwareSimpleModel(model)).toBe(model);
   });
+
+  it("routes prompt-json completions through OpenClaw transport without proxy overrides", () => {
+    const model = {
+      ...buildModel("openai-completions", {
+        id: "AliceBase",
+        provider: "wind",
+        baseUrl: "https://m.wind.com.cn/wstock_share/ai/compatible/v1",
+      }),
+      compat: { toolCallMode: "prompt-json" as const },
+    };
+
+    expect(createTransportAwareStreamFnForModel(model)).toBeTypeOf("function");
+    expect(buildTransportAwareSimpleStreamFn(model)).toBeTypeOf("function");
+    expect(prepareTransportAwareSimpleModel(model)).toMatchObject({
+      api: "openclaw-openai-completions-transport",
+      provider: "wind",
+      id: "AliceBase",
+    });
+  });
+
+  it("does not force boundary transport for prompt-json compat on non-completions apis", () => {
+    const model = {
+      ...buildModel("ollama", {
+        id: "qwen3:32b",
+        provider: "ollama",
+        baseUrl: "http://localhost:11434",
+      }),
+      compat: { toolCallMode: "prompt-json" as const },
+    };
+
+    expect(createTransportAwareStreamFnForModel(model)).toBeUndefined();
+    expect(buildTransportAwareSimpleStreamFn(model)).toBeUndefined();
+    expect(prepareTransportAwareSimpleModel(model)).toBe(model);
+  });
 });

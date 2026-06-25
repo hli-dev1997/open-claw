@@ -6,6 +6,7 @@ import {
   jsonUtf8BytesOrInfinity,
   type BoundedJsonUtf8Bytes,
 } from "../infra/json-utf8-bytes.js";
+import { formatNodeLog } from "../logging/node-log.js";
 import type {
   PluginHookBeforeMessageWriteEvent,
   PluginHookBeforeMessageWriteResult,
@@ -268,6 +269,8 @@ export { getRawSessionAppendMessage };
 export function installSessionToolResultGuard(
   sessionManager: SessionManager,
   opts?: {
+    /** Optional run id for transcript persistence correlation logs. */
+    runId?: string;
     /** Optional session key for transcript update broadcasts. */
     sessionKey?: string;
     /**
@@ -451,6 +454,34 @@ export function installSessionToolResultGuard(
       return undefined;
     }
     const result = originalAppend(finalMessage as never);
+    if (nextRole === "user") {
+      console.log(
+        formatNodeLog({
+          id: "transcript.write.user",
+          name: "写入用户消息",
+          summary: "用户 turn 已持久化到 transcript",
+          fields: {
+            runId: opts?.runId,
+            sessionKey: opts?.sessionKey,
+            messageId: typeof result === "string" ? result : undefined,
+          },
+        }),
+      );
+    }
+    if (nextRole === "assistant" && toolCalls.length === 0) {
+      console.log(
+        formatNodeLog({
+          id: "transcript.write.assistant",
+          name: "写入助手消息",
+          summary: "assistant final reply 已持久化到 transcript",
+          fields: {
+            runId: opts?.runId,
+            sessionKey: opts?.sessionKey,
+            messageId: typeof result === "string" ? result : undefined,
+          },
+        }),
+      );
+    }
 
     const sessionFile = (
       sessionManager as { getSessionFile?: () => string | null }

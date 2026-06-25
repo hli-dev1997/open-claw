@@ -96,6 +96,7 @@ export class CodexAppServerEventProjector {
   private tokenUsage: ReturnType<typeof normalizeUsage>;
   private guardianReviewCount = 0;
   private completedCompactionCount = 0;
+  private modelCalls = 0;
 
   constructor(
     private readonly params: EmbeddedRunAttemptParams,
@@ -213,6 +214,7 @@ export class CodexAppServerEventProjector {
       turnCompleted: Boolean(this.completedTurn),
     });
     return {
+      modelCalls: Math.max(this.modelCalls, this.completedTurn ? 1 : 0),
       aborted: this.aborted || turnInterrupted,
       externalAbort: false,
       timedOut: false,
@@ -758,6 +760,7 @@ export class CodexAppServerEventProjector {
       return;
     }
     this.assistantItemOrder.push(itemId);
+    this.modelCalls += 1;
   }
 
   private readMirroredSessionMessages(): AgentMessage[] {

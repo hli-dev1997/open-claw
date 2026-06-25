@@ -52,7 +52,16 @@ function replaceNodeModulesDir(targetDir: string, sourceDir: string): void {
   try {
     fs.cpSync(sourceDir, stagedDir, { recursive: true });
     fs.rmSync(targetDir, { recursive: true, force: true });
-    fs.renameSync(stagedDir, targetDir);
+    try {
+      fs.renameSync(stagedDir, targetDir);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EPERM" && code !== "EACCES" && code !== "EXDEV") {
+        throw error;
+      }
+      // 解决runtime依赖兼容问题：Windows 上 node_modules rename 可能被杀软或文件句柄短暂拦截，退回 copy 仍能完成安装。
+      fs.cpSync(stagedDir, targetDir, { recursive: true });
+    }
   } finally {
     try {
       fs.rmSync(tempDir, { recursive: true, force: true });

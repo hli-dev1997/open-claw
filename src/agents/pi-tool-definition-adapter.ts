@@ -5,6 +5,7 @@ import type {
 } from "@mariozechner/pi-agent-core";
 import type { ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { logDebug, logError } from "../logger.js";
+import { formatNodeLog, previewLogValue, previewRedactedLogValue } from "../logging/node-log.js";
 import { redactToolDetail } from "../logging/redact.js";
 import { isPlainObject } from "../utils.js";
 import { sanitizeForConsole } from "./console-sanitize.js";
@@ -39,7 +40,11 @@ type ToolExecuteArgs = ToolDefinition["execute"] extends (...args: infer P) => u
   ? P
   : ToolExecuteArgsCurrent;
 type ToolExecuteArgsAny = ToolExecuteArgs | ToolExecuteArgsLegacy | ToolExecuteArgsCurrent;
-const TOOL_ERROR_PARAM_PREVIEW_MAX_CHARS = 600;
+type ToolLogContext = {
+  runId?: string;
+  sessionKey?: string;
+};
+const TOOL_ERROR_PARAM_PREVIEW_MAX_CHARS = 160;
 
 function isAbortSignal(value: unknown): value is AbortSignal {
   return typeof value === "object" && value !== null && "aborted" in value;
@@ -101,18 +106,18 @@ function formatToolParamPreview(label: string, value: unknown): string {
   const serialized = serializeToolParams(value);
   const redacted = redactToolDetail(serialized);
   const preview = sanitizeForConsole(redacted, TOOL_ERROR_PARAM_PREVIEW_MAX_CHARS) ?? "<empty>";
-  return `${label}=${preview}`;
+  return `${label}=${preview} ${label.replace(/Preview$/, "Chars")}=${serialized.length}`;
 }
 
 function describeToolFailureInputs(params: {
   rawParams: unknown;
   effectiveParams: unknown;
 }): string {
-  const parts = [formatToolParamPreview("raw_params", params.rawParams)];
+  const parts = [formatToolParamPreview("paramsPreview", params.rawParams)];
   const rawSerialized = serializeToolParams(params.rawParams);
   const effectiveSerialized = serializeToolParams(params.effectiveParams);
   if (effectiveSerialized !== rawSerialized) {
-    parts.push(formatToolParamPreview("effective_params", params.effectiveParams));
+    parts.push(formatToolParamPreview("effectiveParamsPreview", params.effectiveParams));
   }
   return parts.join(" ");
 }
@@ -215,7 +220,10 @@ export function isClientToolNameConflictError(err: unknown): err is Error {
   return err instanceof Error && err.message.startsWith(CLIENT_TOOL_NAME_CONFLICT_PREFIX);
 }
 
-export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
+export function toToolDefinitions(
+  tools: AnyAgentTool[],
+  logContext: ToolLogContext = {},
+): ToolDefinition[] {
   return tools.map((tool) => {
     const name = tool.name || "tool";
     const normalizedName = normalizeToolName(name);
@@ -237,8 +245,19 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             });
             if (hookOutcome.blocked) {
               if (hookOutcome.kind === "veto") {
-                // [ERROR][节点5.E1:工具层-veto拦截] before_tool_call hook 拦截了本次工具调用（veto），工具不会执行
-                console.log(`[ERROR][节点5.E1:工具层-veto拦截] tool="${normalizedName}" callId="${toolCallId}" reason="${(hookOutcome.reason ?? "").substring(0, 100)}..."`);
+                console.log(
+                  formatNodeLog({
+                    id: "tool.call.blocked",
+                    name: "工具被策略拦截",
+                    summary: "before_tool_call hook 拦截了本次工具调用",
+                    fields: {
+                      ...logContext,
+                      tool: normalizedName,
+                      callId: toolCallId,
+                      reasonPreview: previewLogValue(hookOutcome.reason ?? "", 100),
+                    },
+                  }),
+                );
                 return buildBlockedToolResult({
                   reason: hookOutcome.reason,
                   deniedReason: hookOutcome.deniedReason,
@@ -248,12 +267,39 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             }
             executeParams = hookOutcome.params;
           }
-          // [TRACE][节点5.0:工具层-执行前] 准备执行 Tool
           const _traceToolStartMs = Date.now();
-          console.log(`[TRACE][节点5.0:工具层-执行前] tool="${normalizedName}" callId="${toolCallId}" params=${JSON.stringify(executeParams).slice(0, 500)}`);
+          const paramsRaw = serializeToolParams(executeParams);
+          console.log(
+            formatNodeLog({
+              id: "tool.call.start",
+              name: "执行工具",
+              summary: "执行 LLM tool_call 对应的本地工具",
+              fields: {
+                ...logContext,
+                tool: normalizedName,
+                callId: toolCallId,
+                paramsPreview: previewRedactedLogValue(executeParams, 120),
+                paramsChars: paramsRaw.length,
+              },
+            }),
+          );
           const rawResult = await tool.execute(toolCallId, executeParams, signal, onUpdate);
-          // [TRACE][节点5.1:工具层-执行后] Tool 执行完毕
-          console.log(`[TRACE][节点5.1:工具层-执行后] tool="${normalizedName}" elapsedMs=${Date.now() - _traceToolStartMs} rawResult=${JSON.stringify(rawResult).slice(0, 500)}`);
+          const resultRaw = serializeToolParams(rawResult);
+          console.log(
+            formatNodeLog({
+              id: "tool.call.done",
+              name: "工具完成",
+              summary: "工具返回结果，准备写回下一轮模型上下文",
+              fields: {
+                ...logContext,
+                tool: normalizedName,
+                callId: toolCallId,
+                elapsedMs: Date.now() - _traceToolStartMs,
+                resultPreview: previewRedactedLogValue(resultRaw, 120),
+                resultChars: resultRaw.length,
+              },
+            }),
+          );
           const result = normalizeToolExecutionResult({
             toolName: normalizedName,
             result: rawResult,
@@ -271,17 +317,86 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
             throw err;
           }
           if (isBeforeToolCallBlockedError(err)) {
-            logDebug(`tools: ${normalizedName} blocked by before_tool_call: ${err.reason}`);
+            logDebug(
+              formatNodeLog({
+                id: "tool.call.policy_denied",
+                name: "工具被权限策略拒绝",
+                summary: "当前策略不允许执行",
+                fields: {
+                  ...logContext,
+                  tool: normalizedName,
+                  callId: toolCallId,
+                  reasonPreview: previewLogValue(err.reason, 100),
+                },
+              }),
+            );
             return buildBlockedToolResult({
               reason: err.reason,
             });
           }
           const described = describeToolExecutionError(err);
+          const errorName =
+            err && typeof err === "object" && "name" in err
+              ? String((err as { name?: unknown }).name)
+              : "";
+          if (errorName === "ToolAuthorizationError") {
+            console.log(
+              formatNodeLog({
+                id: "tool.call.policy_denied",
+                name: "工具被权限策略拒绝",
+                summary: "当前策略不允许执行",
+                fields: {
+                  ...logContext,
+                  tool: normalizedName,
+                  callId: toolCallId,
+                  reasonPreview: previewLogValue(described.message, 100),
+                },
+              }),
+            );
+          } else if (/^No .+ configured\.?$/i.test(described.message)) {
+            console.log(
+              formatNodeLog({
+                id: "tool.call.config_missing",
+                name: "工具配置缺失",
+                summary: "工具缺少必要配置",
+                fields: {
+                  ...logContext,
+                  tool: normalizedName,
+                  callId: toolCallId,
+                  reasonPreview: previewLogValue(described.message, 100),
+                },
+              }),
+            );
+          }
           if (described.stack && described.stack !== described.message) {
             logDebug(`tools: ${normalizedName} failed stack:\n${described.stack}`);
           }
-          // [ERROR][节点5.E2:工具层-执行异常] 工具执行过程中抛出异常，返回错误结果（不中断 Agent 主流程）
-          console.log(`[ERROR][节点5.E2:工具层-执行异常] tool="${normalizedName}" callId="${toolCallId}" errMsg="${described.message.substring(0, 100)}..." errCode="${(err as any)?.code ?? "none"}" errStatus="${(err as any)?.status ?? "none"}"`);
+          if (
+            errorName !== "ToolAuthorizationError" &&
+            !/^No .+ configured\.?$/i.test(described.message)
+          ) {
+            console.log(
+              formatNodeLog({
+                id: "tool.call.error",
+                name: "工具异常",
+                summary: "未预期工具执行异常",
+                fields: {
+                  ...logContext,
+                  tool: normalizedName,
+                  callId: toolCallId,
+                  errorPreview: previewLogValue(described.message, 100),
+                  errCode:
+                    (err as { code?: unknown })?.code == null
+                      ? "none"
+                      : String((err as { code?: unknown }).code),
+                  errStatus:
+                    (err as { status?: unknown })?.status == null
+                      ? "none"
+                      : String((err as { status?: unknown }).status),
+                },
+              }),
+            );
+          }
           const inputPreview = describeToolFailureInputs({
             rawParams: params,
             effectiveParams: executeParams,

@@ -162,6 +162,7 @@ const makeAttempt = (overrides: Partial<EmbeddedRunAttemptResult>): EmbeddedRunA
   const messagingToolSentMediaUrls = overrides.messagingToolSentMediaUrls ?? [];
   const successfulCronAdds = overrides.successfulCronAdds;
   return {
+    modelCalls: 0,
     aborted: false,
     externalAbort: false,
     timedOut: false,

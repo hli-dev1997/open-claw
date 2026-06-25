@@ -65,6 +65,7 @@ function resolveInboundReplyHookTarget(
 
 function buildMessageSendingBeforeDeliver(
   ctx: MsgContext | FinalizedMsgContext,
+  runId?: string,
 ): ReplyDispatchBeforeDeliver | undefined {
   const hookRunner = getGlobalHookRunner();
   if (!hookRunner?.hasHooks("message_sending")) {
@@ -72,7 +73,7 @@ function buildMessageSendingBeforeDeliver(
   }
 
   const finalized = finalizeInboundContext(ctx);
-  const hookCtx = deriveInboundMessageHookContext(finalized);
+  const hookCtx = { ...deriveInboundMessageHookContext(finalized), runId };
   const replyTarget = resolveInboundReplyHookTarget(finalized, hookCtx);
 
   return async (payload: ReplyPayload): Promise<ReplyPayload | null> => {
@@ -149,7 +150,8 @@ export async function dispatchInboundMessageWithBufferedDispatcher(params: {
 }): Promise<DispatchInboundResult> {
   const silentReplyContext = resolveDispatcherSilentReplyContext(params.ctx, params.cfg);
   const beforeDeliver =
-    params.dispatcherOptions.beforeDeliver ?? buildMessageSendingBeforeDeliver(params.ctx);
+    params.dispatcherOptions.beforeDeliver ??
+    buildMessageSendingBeforeDeliver(params.ctx, params.replyOptions?.runId);
   const { dispatcher, replyOptions, markDispatchIdle, markRunComplete } =
     createReplyDispatcherWithTyping({
       ...params.dispatcherOptions,
@@ -184,7 +186,8 @@ export async function dispatchInboundMessageWithDispatcher(params: {
   const dispatcher = createReplyDispatcher({
     ...params.dispatcherOptions,
     beforeDeliver:
-      params.dispatcherOptions.beforeDeliver ?? buildMessageSendingBeforeDeliver(params.ctx),
+      params.dispatcherOptions.beforeDeliver ??
+      buildMessageSendingBeforeDeliver(params.ctx, params.replyOptions?.runId),
     silentReplyContext: params.dispatcherOptions.silentReplyContext ?? silentReplyContext,
   });
   return await dispatchInboundMessage({

@@ -28,6 +28,7 @@ export {
   isWebhookRateLimitedForTest,
 };
 
+// 核心执行链路断点01：启动 Feishu provider 监听；观察 opts、runtime、账号配置；掌握标准：能说明 Feishu 插件如何启动并进入消息监听。
 export async function monitorFeishuProvider(opts: MonitorFeishuOpts = {}): Promise<void> {
   const cfg = opts.config;
   if (!cfg) {

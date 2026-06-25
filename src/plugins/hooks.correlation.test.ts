@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHookRunner } from "./hooks.js";
 import { addTestHook, TEST_PLUGIN_AGENT_CTX } from "./hooks.test-helpers.js";
 import { createEmptyPluginRegistry, type PluginRegistry } from "./registry.js";
@@ -9,6 +9,10 @@ describe("hook correlation fields", () => {
 
   beforeEach(() => {
     registry = createEmptyPluginRegistry();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("adds runId to legacy before_agent_start events from hook context", async () => {
@@ -30,6 +34,7 @@ describe("hook correlation fields", () => {
   });
 
   it("adds runId to agent_end events from hook context", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const handler = vi.fn(() => undefined);
     addTestHook({
       registry,
@@ -50,6 +55,9 @@ describe("hook correlation fields", () => {
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({ messages: [], success: true, runId: "test-run-id" }),
       TEST_PLUGIN_AGENT_CTX,
+    );
+    expect(consoleLog.mock.calls.map((call) => String(call[0])).join("\n")).toContain(
+      'runId="test-run-id"',
     );
   });
 
