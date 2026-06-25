@@ -28,6 +28,7 @@ import {
   shouldStripBootstrapFromEmbeddedContext,
   shouldWarnOnOrphanedUserRepair,
   wrapStreamFnRepairMalformedToolCallArguments,
+  wrapStreamFnConvertPromptJsonToolText,
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.js";
@@ -827,6 +828,321 @@ describe("resolveUnknownToolGuardThreshold", () => {
 
   it("floors fractional overrides", () => {
     expect(resolveUnknownToolGuardThreshold({ unknownToolThreshold: 3.7 })).toBe(3);
+  });
+});
+
+describe("wrapStreamFnConvertPromptJsonToolText", () => {
+  it("converts prompt-json assistant text tool calls before dispatch", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call>{"name":"web_search","arguments":{"query":"Pudong weather today"}}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(
+      baseFn as never,
+      new Set(["web_search"]),
+    );
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {} as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "web_search",
+          arguments: { query: "Pudong weather today" },
+        },
+      ],
+    });
+  });
+
+  it("normalizes prompt-json weather aliases to web_search", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call>{"name":"weather","arguments":{}}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(
+      baseFn as never,
+      new Set(["web_search"]),
+    );
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {
+          messages: [
+            {
+              role: "user",
+              content: "Pudong weather today",
+            },
+          ],
+        } as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "web_search",
+          arguments: { query: "Pudong weather today" },
+        },
+      ],
+    });
+  });
+
+  it("fills missing prompt-json web_search query from the latest user message", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call>{"name":"web_search","arguments":{}}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(
+      baseFn as never,
+      new Set(["web_search"]),
+    );
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {
+          messages: [
+            {
+              role: "user",
+              content: "Pudong weather today",
+            },
+          ],
+        } as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "web_search",
+          arguments: { query: "Pudong weather today" },
+        },
+      ],
+    });
+  });
+
+  it("blocks repeated prompt-json web_fetch calls after deterministic safety errors", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call>{"name":"web_fetch","arguments":{"url":"http://127.0.0.1/private"}}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(
+      baseFn as never,
+      new Set(["web_fetch"]),
+    );
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {
+          messages: [
+            {
+              role: "toolResult",
+              toolName: "web_fetch",
+              isError: true,
+              content: "Blocked: resolves to private/internal/special-use IP address",
+            },
+          ],
+        } as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: expect.stringContaining("web_fetch 当前无法继续执行"),
+        },
+      ],
+    });
+  });
+
+  it("converts prompt-json tool calls when the closing tag is missing", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call>{"name":"exec","arguments":{"command":"ls C:\\\\Users\\\\lihao\\\\.openclaw\\\\workspace\\\\memory\\\\2026-06*"}}\n',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(baseFn as never, new Set(["exec"]));
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {} as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "exec",
+          arguments: {
+            command: "ls C:\\Users\\lihao\\.openclaw\\workspace\\memory\\2026-06*",
+          },
+        },
+      ],
+    });
+  });
+
+  it("converts prompt-json tool calls after explanatory text and a repeated opening tag", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: 'This is just SVG path data. Let me get the actual form content.\n\n<tool_call>\n<tool_call>{"name":"write","arguments":{"path":"C:/Users/lihao/.openclaw/workspace/temp_xhs11.js","content":"console.log(1)"}}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(baseFn as never, new Set(["write"]));
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {} as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "write",
+          arguments: {
+            path: "C:/Users/lihao/.openclaw/workspace/temp_xhs11.js",
+            content: "console.log(1)",
+          },
+        },
+      ],
+    });
+  });
+
+  it("converts prompt-json tool calls when JSON is wrapped in prose and a code fence", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: [
+            "I need to list the workspace folder.",
+            "<tool_call>",
+            '```json\n{"name":"dir_list","arguments":{"node":"local","path":"C:/Users/lihao/.openclaw/workspace/memory"}}\n```',
+            "</tool_call>",
+          ].join("\n"),
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(baseFn as never, new Set(["dir_list"]));
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {} as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "dir_list",
+          arguments: {
+            node: "local",
+            path: "C:/Users/lihao/.openclaw/workspace/memory",
+          },
+        },
+      ],
+    });
   });
 });
 

@@ -880,6 +880,8 @@ function resolveConfiguredFallbackModel(params: {
         ...(resolvedParams ? { params: resolvedParams } : {}),
         ...(requestTimeoutMs !== undefined ? { requestTimeoutMs } : {}),
         headers: requestConfig.headers,
+        // 解决tool兼容问题：fallback 模型也要继承 compat，否则 prompt-json 配置会在模型解析后丢失。
+        ...(configuredModel?.compat ? { compat: configuredModel.compat } : {}),
       } as Model<Api>,
       providerRequest,
     ),

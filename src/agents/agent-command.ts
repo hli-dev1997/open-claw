@@ -423,6 +423,7 @@ async function prepareAgentCommandExecution(
   };
 }
 
+// 核心执行链路断点12：Agent command 核心编排；观察 cfg、model、workspace、session、prepared execution；掌握标准：能说明 Agent 执行前如何准备模型、上下文、会话和 fallback。
 async function agentCommandInternal(
   opts: AgentCommandOpts & { senderIsOwner: boolean },
   runtime: RuntimeEnv = defaultRuntime,
@@ -1272,6 +1273,7 @@ export async function agentCommand(
 // 入站消息入口：从 HTTP/WebSocket 触发 Agent 执行。
 // 此函数是网络层到 Agent 执行层的桥接点，网络入口必须显式声明 senderIsOwner
 // 将 CommandInput 传给 agentCommandInternal，进入核心调度链路
+// 核心执行链路断点11：外部入口调用 Agent command；观察 body、session、sender、model override；掌握标准：能说明 ingress 请求进入 Agent 执行前做了哪些边界校验。
 export async function agentCommandFromIngress(
   opts: AgentCommandIngressOpts,
   runtime: RuntimeEnv = defaultRuntime,

@@ -317,6 +317,7 @@ export async function persistCliTurnTranscript(params: {
 //   - 构建技能快照（Skills）
 //   - 组装认证/限流策略
 //   之后分发到具体的执行器
+// 核心执行链路断点13：执行一次 Agent 模型调用尝试；观察 model、agent、messages、tools、attempt 参数；掌握标准：能说明一次模型调用 attempt 如何进入 runner。
 export function runAgentAttempt(params: {
   providerOverride: string;
   modelOverride: string;

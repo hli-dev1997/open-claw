@@ -192,13 +192,15 @@ export const ModelCompatSchema = z
     supportsReasoningEffort: z.boolean().optional(),
     supportsUsageInStreaming: z.boolean().optional(),
     supportsTools: z.boolean().optional(),
+    // 解决tool兼容问题：允许配置把原生工具调用切换为文本 <tool_call> 协议。
+    toolCallMode: z.union([z.literal("native"), z.literal("prompt-json")]).optional(),
     supportsStrictMode: z.boolean().optional(),
     requiresStringContent: z.boolean().optional(),
     visibleReasoningDetailTypes: z.array(z.string().min(1)).optional(),
     supportedReasoningEfforts: z.array(z.string().min(1)).optional(),
     reasoningEffortMap: z.record(z.string().min(1), z.string().min(1)).optional(),
     maxTokensField: z
-      .union([z.literal("max_completion_tokens"), z.literal("max_tokens")])
+      .union([z.literal("max_completion_tokens"), z.literal("max_tokens"), z.literal("maxTokens")])
       .optional(),
     thinkingFormat: z
       .union([

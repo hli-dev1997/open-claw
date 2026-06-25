@@ -1109,6 +1109,58 @@ describe("installBundledRuntimeDeps", () => {
     });
   });
 
+  it("falls back to copying isolated node_modules when Windows blocks the final rename", () => {
+    const installRoot = makeTempDir();
+    const installExecutionRoot = makeTempDir();
+    const realRenameSync = fs.renameSync.bind(fs);
+    let blockedRename = false;
+    vi.spyOn(fs, "renameSync").mockImplementation((source, target) => {
+      if (
+        !blockedRename &&
+        path.basename(String(source)) === "node_modules" &&
+        path.basename(path.dirname(String(source))).startsWith(".openclaw-runtime-deps-copy-")
+      ) {
+        blockedRename = true;
+        const error = new Error("operation not permitted") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      return realRenameSync(source, target);
+    });
+    spawnSyncMock.mockImplementation((_command, _args, options) => {
+      const cwd = String(options?.cwd ?? "");
+      writeInstalledPackage(cwd, "tokenjuice", "0.6.1");
+      return {
+        pid: 123,
+        output: [],
+        stdout: "",
+        stderr: "",
+        signal: null,
+        status: 0,
+      };
+    });
+
+    installBundledRuntimeDeps({
+      installRoot,
+      installExecutionRoot,
+      missingSpecs: ["tokenjuice@0.6.1"],
+      env: {},
+    });
+
+    expect(blockedRename).toBe(true);
+    expect(
+      JSON.parse(
+        fs.readFileSync(
+          path.join(installRoot, "node_modules", "tokenjuice", "package.json"),
+          "utf8",
+        ),
+      ),
+    ).toEqual({
+      name: "tokenjuice",
+      version: "0.6.1",
+    });
+  });
+
   it("rejects invalid install specs before spawning npm", () => {
     expect(() =>
       installBundledRuntimeDeps({

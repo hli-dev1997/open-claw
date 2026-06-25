@@ -84,6 +84,21 @@ describe("describeEmbeddedAgentStreamStrategy", () => {
       }),
     ).toBe("session-custom");
   });
+
+  it("forces prompt-json completions through boundary-aware transport", () => {
+    expect(
+      describeEmbeddedAgentStreamStrategy({
+        currentStreamFn: vi.fn() as never,
+        shouldUseWebSocketTransport: false,
+        model: {
+          api: "openai-completions",
+          provider: "wind",
+          id: "AliceBase",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+      }),
+    ).toBe("boundary-aware:openai-completions");
+  });
 });
 
 describe("resolveEmbeddedAgentStreamFn", () => {
@@ -145,6 +160,31 @@ describe("resolveEmbeddedAgentStreamFn", () => {
     });
 
     expect(streamFn).not.toBe(streamSimple);
+  });
+
+  it("replaces custom session streams for prompt-json completions", async () => {
+    const customStreamFn = vi.fn() as unknown as StreamFn;
+    const innerStreamFn = vi.fn(async (_model, _context, options) => options);
+    overrideBoundaryAwareStreamFnOnce(innerStreamFn as never);
+    const streamFn = resolveEmbeddedAgentStreamFn({
+      currentStreamFn: customStreamFn,
+      shouldUseWebSocketTransport: false,
+      sessionId: "session-1",
+      model: {
+        api: "openai-completions",
+        provider: "wind",
+        id: "AliceBase",
+        compat: { toolCallMode: "prompt-json" },
+      } as never,
+      resolvedApiKey: "wind-token",
+    });
+
+    expect(streamFn).not.toBe(customStreamFn);
+    await expect(
+      streamFn({ provider: "wind", id: "AliceBase" } as never, {} as never, {}),
+    ).resolves.toMatchObject({ apiKey: "wind-token" });
+    expect(customStreamFn).not.toHaveBeenCalled();
+    expect(innerStreamFn).toHaveBeenCalledTimes(1);
   });
 
   it("injects the resolved run api key into provider-owned stream functions", async () => {

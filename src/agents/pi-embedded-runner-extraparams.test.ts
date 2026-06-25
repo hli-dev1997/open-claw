@@ -946,6 +946,61 @@ describe("applyExtraParamsToAgent", () => {
     expect(payload).not.toHaveProperty("store");
   });
 
+  it("does not let extra_body overwrite prompt-json protected request fields", () => {
+    const warnSpy = vi.spyOn(log, "warn").mockImplementation(() => {});
+    try {
+      const payload = runResponsesPayloadMutationCase({
+        applyProvider: "wind",
+        applyModelId: "AliceBase",
+        cfg: {
+          agents: {
+            defaults: {
+              models: {
+                "wind/AliceBase": {
+                  params: {
+                    extraBody: {
+                      model: "wrong-model",
+                      stream: true,
+                      stream_options: { include_usage: true },
+                      tools: [{ type: "function" }],
+                      vendor_flag: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        model: {
+          api: "openai-completions",
+          provider: "wind",
+          id: "AliceBase",
+          baseUrl: "https://example.test/v1",
+          compat: { toolCallMode: "prompt-json" },
+        } as unknown as Model<"openai-completions">,
+        payload: {
+          model: "AliceBase",
+          messages: [],
+          stream: false,
+        },
+      });
+
+      expect(payload).toMatchObject({
+        model: "AliceBase",
+        messages: [],
+        stream: false,
+        vendor_flag: true,
+      });
+      expect(payload).not.toHaveProperty("stream_options");
+      expect(payload).not.toHaveProperty("tools");
+      expect(warnSpy).toHaveBeenCalledWith(
+        "extra_body ignored prompt-json protected request payload keys: model, stream, stream_options, tools",
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
   it("forwards chat_template_kwargs params as top-level openai-completions payload fields", () => {
     const payload = runResponsesPayloadMutationCase({
       applyProvider: "vllm",

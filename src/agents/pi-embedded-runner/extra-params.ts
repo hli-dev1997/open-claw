@@ -499,11 +499,30 @@ function createOpenAICompletionsExtraBodyWrapper(
       return underlying(model, context, options);
     }
     return streamWithPayloadPatch(underlying, model, context, options, (payloadObj) => {
-      const collisions = Object.keys(extraBody).filter((key) => Object.hasOwn(payloadObj, key));
+      const promptJsonToolCompat =
+        (model as { compat?: { toolCallMode?: unknown } }).compat?.toolCallMode === "prompt-json";
+      const protectedKeys = promptJsonToolCompat
+        ? new Set(["messages", "model", "stream", "stream_options", "tool_choice", "tools"])
+        : undefined;
+      const sanitizedExtraBody = protectedKeys
+        ? Object.fromEntries(Object.entries(extraBody).filter(([key]) => !protectedKeys.has(key)))
+        : extraBody;
+      const skippedKeys = protectedKeys
+        ? Object.keys(extraBody).filter((key) => protectedKeys.has(key))
+        : [];
+      if (skippedKeys.length > 0) {
+        // 解决extra_body兼容问题：prompt-json 请求关键字段由 transport 统一生成，不能再被 extra_body 覆盖回不兼容形态。
+        log.warn(
+          `extra_body ignored prompt-json protected request payload keys: ${skippedKeys.join(", ")}`,
+        );
+      }
+      const collisions = Object.keys(sanitizedExtraBody).filter((key) =>
+        Object.hasOwn(payloadObj, key),
+      );
       if (collisions.length > 0) {
         log.warn(`extra_body overwriting request payload keys: ${collisions.join(", ")}`);
       }
-      Object.assign(payloadObj, extraBody);
+      Object.assign(payloadObj, sanitizedExtraBody);
     });
   };
 }

@@ -1,5 +1,5 @@
 import type { AgentMessage, StreamFn } from "@mariozechner/pi-agent-core";
-import { streamSimple } from "@mariozechner/pi-ai";
+import { parseStreamingJson, streamSimple } from "@mariozechner/pi-ai";
 import { formatNodeLog, previewRedactedLogValue } from "../../../logging/node-log.js";
 import { visitObjectContentBlocks } from "../../../shared/message-content-blocks.js";
 import { normalizeLowercaseStringOrEmpty } from "../../../shared/string-coerce.js";
@@ -14,6 +14,7 @@ import { hasUnredactedSessionsSpawnAttachments } from "../../tool-call-shared.js
 import { normalizeToolName } from "../../tool-policy.js";
 import { shouldAllowProviderOwnedThinkingReplay } from "../../transcript-policy.js";
 import type { TranscriptPolicy } from "../../transcript-policy.js";
+import { log } from "../logger.js";
 import { wrapStreamObjectEvents } from "./stream-wrapper.js";
 
 type UnknownToolLoopGuardState = {
@@ -235,6 +236,361 @@ function isToolCallBlockType(type: unknown): boolean {
   return type === "toolCall" || type === "toolUse" || type === "functionCall";
 }
 
+function normalizePromptJsonToolArguments(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  if (typeof value === "string") {
+    const parsed = parseStreamingJson(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  }
+  return undefined;
+}
+
+function normalizePromptJsonToolCall(value: unknown): PromptJsonToolCall | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const candidate =
+    record.tool_call && typeof record.tool_call === "object"
+      ? (record.tool_call as Record<string, unknown>)
+      : record;
+  const name =
+    typeof candidate.name === "string"
+      ? candidate.name.trim()
+      : typeof candidate.tool === "string"
+        ? candidate.tool.trim()
+        : "";
+  if (!name) {
+    return undefined;
+  }
+  const args = normalizePromptJsonToolArguments(candidate.arguments ?? candidate.input ?? {});
+  if (!args) {
+    return undefined;
+  }
+  return { name, arguments: args };
+}
+
+function parsePromptJsonToolCallText(text: string): PromptJsonToolCall | undefined {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const tagged = [...trimmed.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)]
+    .map((match) => match[1]?.trim())
+    .filter((value): value is string => Boolean(value));
+  const openTagged = [...trimmed.matchAll(/<tool_call>\s*([\s\S]*)$/gi)].at(-1)?.[1]?.trim();
+  // 解决tool兼容问题：兼容模型可能输出说明文字、重复 <tool_call> 起始标签或漏掉 </tool_call>，这里按候选 payload 逐个解析。
+  const candidates = [...tagged.reverse(), openTagged, trimmed].filter((value): value is string =>
+    Boolean(value),
+  );
+  for (const candidate of candidates) {
+    for (const normalizedCandidate of buildPromptJsonToolCallJsonCandidates(candidate)) {
+      const toolCall = normalizePromptJsonToolCall(parseStreamingJson(normalizedCandidate));
+      if (toolCall) {
+        return toolCall;
+      }
+    }
+  }
+  return undefined;
+}
+
+function buildPromptJsonToolCallJsonCandidates(text: string): string[] {
+  const normalized = text
+    .replace(/^(?:\s*<tool_call>\s*)+/i, "")
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const candidates = [normalized];
+  // 解决tool兼容问题：兼容模型有时把 JSON 包在说明文字或代码块里，只提取完整对象再解析。
+  for (const jsonObject of extractBalancedJsonObjects(normalized)) {
+    candidates.push(jsonObject);
+  }
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function extractBalancedJsonObjects(text: string): string[] {
+  const results: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+      depth += 1;
+      continue;
+    }
+    if (char !== "}" || depth === 0) {
+      continue;
+    }
+    depth -= 1;
+    if (depth === 0 && start >= 0) {
+      results.push(text.slice(start, index + 1));
+      start = -1;
+    }
+  }
+  return results;
+}
+
+function normalizePromptJsonAliasKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s.-]+/g, "_");
+}
+
+function coercePromptJsonWeatherAliasArguments(
+  args: Record<string, unknown>,
+  fallbackQuery?: string,
+): Record<string, unknown> {
+  const query =
+    typeof args.query === "string" && args.query.trim()
+      ? args.query.trim()
+      : typeof args.location === "string" && args.location.trim()
+        ? `${args.location.trim()} weather`
+        : typeof args.city === "string" && args.city.trim()
+          ? `${args.city.trim()} weather`
+          : fallbackQuery?.trim() || "current weather";
+  return { query };
+}
+
+function coercePromptJsonWebSearchArguments(
+  args: Record<string, unknown>,
+  fallbackQuery?: string,
+): Record<string, unknown> {
+  const query = typeof args.query === "string" && args.query.trim() ? args.query.trim() : "";
+  if (query) {
+    return { ...args, query };
+  }
+  const fallback = fallbackQuery?.trim();
+  // 解决tool兼容问题：prompt-json 文本兜底路径也要补齐 web_search.query，避免模型漏参后触发 query required。
+  return fallback ? { ...args, query: fallback } : args;
+}
+
+function resolvePromptJsonTextToolCallName(
+  toolCall: PromptJsonToolCall,
+  allowedToolNames?: Set<string>,
+  aliasFallbackQuery?: string,
+): PromptJsonToolCall | undefined {
+  const resolvedName = resolveExactAllowedToolName(toolCall.name, allowedToolNames);
+  if (!allowedToolNames || resolvedName) {
+    const name = resolvedName ?? toolCall.name;
+    return {
+      ...toolCall,
+      name,
+      arguments:
+        name === "web_search"
+          ? coercePromptJsonWebSearchArguments(toolCall.arguments, aliasFallbackQuery)
+          : toolCall.arguments,
+    };
+  }
+  const aliasKey = normalizePromptJsonAliasKey(toolCall.name);
+  if (
+    allowedToolNames.has("web_search") &&
+    (aliasKey === "weather" || aliasKey === "weather_search" || aliasKey === "forecast")
+  ) {
+    return {
+      name: "web_search",
+      arguments: coercePromptJsonWeatherAliasArguments(toolCall.arguments, aliasFallbackQuery),
+    };
+  }
+  return undefined;
+}
+
+function promptJsonTextFromUnknownContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .map((block) => {
+      if (
+        block &&
+        typeof block === "object" &&
+        (block as { type?: unknown }).type === "text" &&
+        typeof (block as { text?: unknown }).text === "string"
+      ) {
+        return (block as { text: string }).text;
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+function getPromptJsonAliasFallbackQueryFromContext(context: unknown): string | undefined {
+  const messages = (context as { messages?: unknown })?.messages;
+  if (!Array.isArray(messages)) {
+    return undefined;
+  }
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as { role?: unknown; content?: unknown } | undefined;
+    if (message?.role !== "user") {
+      continue;
+    }
+    const text = promptJsonTextFromUnknownContent(message.content).trim();
+    if (text) {
+      return text;
+    }
+  }
+  return undefined;
+}
+
+type PromptJsonToolErrorBlock = {
+  toolName: string;
+  text: string;
+};
+
+function getPromptJsonToolNameFromUnknownMessage(message: unknown): string {
+  return typeof (message as { toolName?: unknown } | undefined)?.toolName === "string"
+    ? (message as { toolName: string }).toolName
+    : "";
+}
+
+function collectPromptJsonToolErrorBlocksFromContext(context: unknown): PromptJsonToolErrorBlock[] {
+  const messages = (context as { messages?: unknown })?.messages;
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  const results: PromptJsonToolErrorBlock[] = [];
+  for (const message of messages) {
+    if (!message || typeof message !== "object") {
+      continue;
+    }
+    const record = message as { role?: unknown; isError?: unknown; content?: unknown };
+    if (record.role !== "toolResult" || record.isError !== true) {
+      continue;
+    }
+    results.push({
+      toolName: getPromptJsonToolNameFromUnknownMessage(message),
+      text: promptJsonTextFromUnknownContent(record.content),
+    });
+  }
+  return results;
+}
+
+function getPromptJsonBlockedToolRetryMessage(
+  toolCall: PromptJsonToolCall,
+  priorErrors: PromptJsonToolErrorBlock[],
+): string | undefined {
+  const hasPriorError = (toolName: string, pattern: RegExp) =>
+    priorErrors.some((entry) => entry.toolName === toolName && pattern.test(entry.text));
+  // 解决工具错误循环问题：兼容模型可能忽略工具错误继续输出同类 <tool_call>，这里把确定失败的 web 工具循环改成可见文本。
+  if (
+    toolCall.name === "web_search" &&
+    hasPriorError("web_search", /SearXNG base URL is not configured|query required/i)
+  ) {
+    return "web_search 当前无法继续执行：搜索服务未配置或缺少有效查询。我会停止重复调用该工具，并基于已有信息回复。";
+  }
+  if (
+    toolCall.name === "web_fetch" &&
+    hasPriorError("web_fetch", /Blocked: resolves to private\/internal\/special-use IP address/i)
+  ) {
+    return "web_fetch 当前无法继续执行：目标地址被安全策略拦截为内部或特殊用途地址。我会停止重复抓取该地址，并基于已有信息回复。";
+  }
+  return undefined;
+}
+
+// 核心执行链路断点25：转换单条 assistant message 中的工具调用文本；观察 text block、parsed toolCall、message blocks；掌握标准：能说明一条模型消息如何被改写成工具调用消息。
+function convertPromptJsonTextToolCallInMessage(
+  message: unknown,
+  allowedToolNames?: Set<string>,
+  logContext?: { provider?: unknown; model?: unknown; source: string },
+  aliasFallbackQuery?: string,
+  priorToolErrors?: PromptJsonToolErrorBlock[],
+): boolean {
+  // 解决tool兼容问题：有些路径会把 <tool_call> 当普通 assistant 文本返回，这里兜底转成可执行 toolCall。
+  if (!message || typeof message !== "object") {
+    return false;
+  }
+  const record = message as { role?: unknown; content?: unknown };
+  if (record.role !== "assistant" || !Array.isArray(record.content)) {
+    return false;
+  }
+  const textBlocks = record.content.filter(
+    (block): block is { type: "text"; text: string } =>
+      Boolean(block) &&
+      typeof block === "object" &&
+      (block as { type?: unknown }).type === "text" &&
+      typeof (block as { text?: unknown }).text === "string",
+  );
+  if (textBlocks.length !== record.content.length) {
+    return false;
+  }
+  const text = textBlocks.map((block) => block.text).join("\n");
+  const toolCall = parsePromptJsonToolCallText(text);
+  if (!toolCall) {
+    if (/<\s*tool_call\b/i.test(text)) {
+      log.warn(
+        `prompt-json assistant text contained tool_call but parsing failed: source=${logContext?.source ?? "unknown"} provider=${String(logContext?.provider ?? "unknown")} model=${String(logContext?.model ?? "unknown")}`,
+      );
+    }
+    return false;
+  }
+  const resolvedToolCall = resolvePromptJsonTextToolCallName(
+    toolCall,
+    allowedToolNames,
+    aliasFallbackQuery,
+  );
+  if (!resolvedToolCall) {
+    log.warn(
+      `prompt-json assistant text tool call is not registered locally: source=${logContext?.source ?? "unknown"} provider=${String(logContext?.provider ?? "unknown")} model=${String(logContext?.model ?? "unknown")} tool=${toolCall.name}`,
+    );
+    return false;
+  }
+  if (resolvedToolCall.name !== toolCall.name) {
+    log.info(
+      `prompt-json assistant text tool alias normalized: source=${logContext?.source ?? "unknown"} provider=${String(logContext?.provider ?? "unknown")} model=${String(logContext?.model ?? "unknown")} tool=${toolCall.name} normalizedTool=${resolvedToolCall.name}`,
+    );
+  }
+  const retryBlockMessage = getPromptJsonBlockedToolRetryMessage(
+    resolvedToolCall,
+    priorToolErrors ?? [],
+  );
+  if (retryBlockMessage) {
+    log.warn(
+      `prompt-json assistant text blocked repeated failing tool call: source=${logContext?.source ?? "unknown"} provider=${String(logContext?.provider ?? "unknown")} model=${String(logContext?.model ?? "unknown")} tool=${resolvedToolCall.name}`,
+    );
+    record.content = [{ type: "text", text: retryBlockMessage }];
+    return true;
+  }
+  record.content = [
+    {
+      type: "toolCall",
+      id: `call_prompt_json_${Math.random().toString(36).slice(2, 12)}`,
+      name: resolvedToolCall.name,
+      arguments: resolvedToolCall.arguments,
+    },
+  ];
+  log.info(
+    `prompt-json assistant text converted to structured tool call: source=${logContext?.source ?? "unknown"} provider=${String(logContext?.provider ?? "unknown")} model=${String(logContext?.model ?? "unknown")} tool=${resolvedToolCall.name}`,
+  );
+  return true;
+}
+
 const REPLAY_TOOL_CALL_NAME_MAX_CHARS = 64;
 
 type ReplayToolCallBlock = {
@@ -243,6 +599,11 @@ type ReplayToolCallBlock = {
   name?: unknown;
   input?: unknown;
   arguments?: unknown;
+};
+
+type PromptJsonToolCall = {
+  name: string;
+  arguments: Record<string, unknown>;
 };
 
 type ReplayToolCallSanitizeReport = {
@@ -941,6 +1302,73 @@ export function wrapStreamFnTrimToolCallNames(
       runId: guardOptions?.runId,
       sessionKey: guardOptions?.sessionKey,
     });
+  };
+}
+
+// 核心执行链路断点24：包装 streamFn 并转换 prompt-json 工具调用；观察 allowedToolNames、baseFn 输出、转换后的 message；掌握标准：能说明兼容层如何让 runner 识别公司 API 返回的工具调用。
+export function wrapStreamFnConvertPromptJsonToolText(
+  baseFn: StreamFn,
+  allowedToolNames?: Set<string>,
+): StreamFn {
+  return (model, context, streamOptions) => {
+    const compat = (model as { compat?: { toolCallMode?: unknown } }).compat;
+    // 解决tool兼容问题：只对 prompt-json completions 包装，避免影响原生支持 tools 的模型。
+    if (
+      (model as { api?: unknown }).api !== "openai-completions" ||
+      compat?.toolCallMode !== "prompt-json"
+    ) {
+      return baseFn(model, context, streamOptions);
+    }
+    const aliasFallbackQuery = getPromptJsonAliasFallbackQueryFromContext(context);
+    const priorToolErrors = collectPromptJsonToolErrorBlocksFromContext(context);
+    const wrap = (stream: ReturnType<typeof streamSimple>): ReturnType<typeof streamSimple> => {
+      const originalResult = stream.result.bind(stream);
+      stream.result = async () => {
+        const message = await originalResult();
+        convertPromptJsonTextToolCallInMessage(
+          message,
+          allowedToolNames,
+          {
+            provider: (model as { provider?: unknown }).provider,
+            model: (model as { id?: unknown }).id,
+            source: "result",
+          },
+          aliasFallbackQuery,
+          priorToolErrors,
+        );
+        return message;
+      };
+      wrapStreamObjectEvents(stream, (event) => {
+        convertPromptJsonTextToolCallInMessage(
+          event.partial,
+          allowedToolNames,
+          {
+            provider: (model as { provider?: unknown }).provider,
+            model: (model as { id?: unknown }).id,
+            source: "partial",
+          },
+          aliasFallbackQuery,
+          priorToolErrors,
+        );
+        convertPromptJsonTextToolCallInMessage(
+          event.message,
+          allowedToolNames,
+          {
+            provider: (model as { provider?: unknown }).provider,
+            model: (model as { id?: unknown }).id,
+            source: "message",
+          },
+          aliasFallbackQuery,
+          priorToolErrors,
+        );
+      });
+      return stream;
+    };
+    const maybeStream = baseFn(model, context, streamOptions);
+    if (maybeStream && typeof maybeStream === "object" && "then" in maybeStream) {
+      return Promise.resolve(maybeStream).then(wrap);
+    }
+    return wrap(maybeStream);
   };
 }
 

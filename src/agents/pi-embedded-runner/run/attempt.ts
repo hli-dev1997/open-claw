@@ -301,6 +301,7 @@ import {
 } from "./attempt.tool-call-argument-repair.js";
 import {
   sanitizeReplayToolCallIdsForStream,
+  wrapStreamFnConvertPromptJsonToolText,
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.tool-call-normalization.js";
@@ -364,6 +365,7 @@ export {
   wrapStreamFnRepairMalformedToolCallArguments,
 } from "./attempt.tool-call-argument-repair.js";
 export {
+  wrapStreamFnConvertPromptJsonToolText,
   wrapStreamFnSanitizeMalformedToolCalls,
   wrapStreamFnTrimToolCallNames,
 } from "./attempt.tool-call-normalization.js";
@@ -414,14 +416,12 @@ export function remapInjectedContextFilesToWorkspace(params: {
     const target = params.targetWorkspaceDir.replace(/\\/g, "/");
     const filePath = file.path.replace(/\\/g, "/");
     const relative = path.posix.relative(src, filePath);
-    const canRemap = relative === "" || (!relative.startsWith("..") && !path.posix.isAbsolute(relative));
+    const canRemap =
+      relative === "" || (!relative.startsWith("..") && !path.posix.isAbsolute(relative));
     return canRemap
       ? {
           ...file,
-          path:
-            relative === ""
-              ? params.targetWorkspaceDir
-              : path.posix.join(target, relative),
+          path: relative === "" ? params.targetWorkspaceDir : path.posix.join(target, relative),
         }
       : file;
   });
@@ -653,6 +653,7 @@ function collectAttemptExplicitToolAllowlistSources(params: {
   ]);
 }
 
+// 核心执行链路断点14：嵌入式 Agent runner 主入口；观察 session、tools、model、streamFn、onToolResult；掌握标准：能说明模型调用、工具调用和结果回传在 runner 中如何组织。
 export async function runEmbeddedAttempt(
   params: EmbeddedRunAttemptParams,
 ): Promise<EmbeddedRunAttemptResult> {
@@ -1816,6 +1817,7 @@ export async function runEmbeddedAttempt(
         wsApiKey,
         model: params.model,
       });
+      // 核心执行链路断点15：选择模型 stream 函数；观察 model.api、compat.toolCallMode、provider；掌握标准：能说明为什么公司 API 会走 OpenAI-compatible/prompt-json 链路。
       activeSession.agent.streamFn = resolveEmbeddedAgentStreamFn({
         currentStreamFn: defaultSessionStreamFn,
         providerStreamFn,
@@ -2024,6 +2026,12 @@ export async function runEmbeddedAttempt(
         activeSession.agent.streamFn,
         allowedToolNames,
         transcriptPolicy,
+      );
+      // 解决tool兼容问题：在工具派发前把文本 <tool_call> 兜底转回结构化 toolCall。
+      // 核心执行链路断点24：包装 runner streamFn 并转换 prompt-json 工具调用；观察 allowedToolNames、baseFn 输出、转换后的 message；掌握标准：能说明兼容层如何让 runner 识别公司 API 返回的工具调用。
+      activeSession.agent.streamFn = wrapStreamFnConvertPromptJsonToolText(
+        activeSession.agent.streamFn,
+        allowedToolNames,
       );
       activeSession.agent.streamFn = wrapStreamFnTrimToolCallNames(
         activeSession.agent.streamFn,

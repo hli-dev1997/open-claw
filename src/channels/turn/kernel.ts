@@ -189,6 +189,7 @@ async function runPreparedChannelTurnCore<
   params: PreparedChannelTurn<TDispatchResult>,
   options: { suppressObserveOnlyDispatch: boolean },
 ): Promise<DispatchedChannelTurnResult<TDispatchResult>> {
+  // 核心执行链路断点09：执行准备好的 channel turn；观察 admission、sessionKey、recordInboundSession、runDispatch；掌握标准：能说明标准化后的消息如何进入真正回复分发。
   const admission = params.admission ?? ({ kind: "dispatch" } as const);
   emit({
     ...params,
@@ -300,6 +301,7 @@ export async function runPreparedChannelTurn<
   return await runPreparedChannelTurnCore(params, { suppressObserveOnlyDispatch: true });
 }
 
+// 核心执行链路断点08：执行 channel turn 主流程；观察 ingest 结果、classify 结果、preflight、resolved turn；掌握标准：能说明 channel 层如何标准化一次外部消息请求。
 export async function runChannelTurn<
   TRaw,
   TDispatchResult = DispatchedChannelTurnResult["dispatchResult"],

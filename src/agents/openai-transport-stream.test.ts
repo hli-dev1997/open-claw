@@ -588,6 +588,299 @@ describe("openai transport stream", () => {
     }
   });
 
+  it("sends prompt-json completions as non-streaming text protocol requests", async () => {
+    let captured:
+      | {
+          path?: string;
+          body?: Record<string, unknown>;
+        }
+      | undefined;
+    const server = createServer((req, res) => {
+      let body = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        captured = {
+          path: req.url,
+          body: JSON.parse(body) as Record<string, unknown>,
+        };
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        res.end(
+          JSON.stringify({
+            created: 1781146473,
+            usage: {
+              completion_tokens: 18,
+              prompt_tokens: 326,
+              total_tokens: 344,
+            },
+            model: "AliceBase",
+            id: "chatcmpl-prompt-json-proof",
+            choices: [
+              {
+                finish_reason: "stop",
+                index: 0,
+                message: {
+                  role: "assistant",
+                  tool_calls: [],
+                  content:
+                    'Let me check that.\n\n<tool_call>\n<tool_call>{"name":"weather","arguments":{}}</tool_call>',
+                },
+              },
+            ],
+            object: "chat.completion",
+          }),
+        );
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Missing loopback server address");
+      }
+      const model = {
+        id: "AliceBase",
+        name: "AliceBase",
+        api: "openai-completions",
+        provider: "wind",
+        baseUrl: `http://127.0.0.1:${address.port}/v1`,
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096,
+        compat: {
+          maxTokensField: "maxTokens",
+          supportsUsageInStreaming: true,
+          toolCallMode: "prompt-json",
+        },
+      } as unknown as Model<"openai-completions">;
+      const stream = createOpenAICompletionsTransportStreamFn()(
+        model,
+        {
+          systemPrompt: "system",
+          messages: [
+            {
+              role: "user",
+              content: "Pudong weather today",
+              timestamp: Date.now(),
+            },
+          ],
+          tools: [
+            {
+              name: "web_search",
+              description: "Search the web",
+              parameters: {
+                type: "object",
+                properties: { query: { type: "string" } },
+                required: ["query"],
+              },
+            },
+          ],
+        } as never,
+        {
+          apiKey: "test-key",
+          maxTokens: 512,
+          toolChoice: "required",
+          onPayload(payload) {
+            const params = payload as Record<string, unknown>;
+            params.stream = true;
+            params.stream_options = { include_usage: true };
+            params.tools = [{ type: "function", function: { name: "web_search" } }];
+            params.tool_choice = "required";
+            return params;
+          },
+        } as never,
+      );
+
+      const events: Array<{
+        type: string;
+        delta?: string;
+        reason?: string;
+        message?: { content?: unknown[] };
+      }> = [];
+      for await (const event of stream as AsyncIterable<{
+        type: string;
+        delta?: string;
+        reason?: string;
+        message?: { content?: unknown[] };
+      }>) {
+        events.push(event);
+      }
+
+      expect(captured?.path).toBe("/v1/chat/completions");
+      expect(captured?.body).toMatchObject({
+        model: "AliceBase",
+        stream: false,
+        maxTokens: 512,
+      });
+      expect(captured?.body).not.toHaveProperty("tools");
+      expect(captured?.body).not.toHaveProperty("tool_choice");
+      expect(captured?.body).not.toHaveProperty("stream_options");
+      const messages = captured?.body?.messages as Array<{ content?: string }> | undefined;
+      expect(messages?.[0]?.content).toContain("## Tool Call Protocol");
+      expect(messages?.[0]?.content).toContain("web_search");
+      expect(messages?.[0]?.content).toContain("do not emit `weather`");
+      expect(messages?.[0]?.content).toContain("Do not output `NO_REPLY`");
+      expect(messages?.[0]?.content).toContain(
+        "After a <tool_result> block returns useful search results",
+      );
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: "toolcall_start" }),
+          expect.objectContaining({
+            type: "toolcall_delta",
+            delta: '{"query":"Pudong weather today"}',
+          }),
+          expect.objectContaining({ type: "done", reason: "toolUse" }),
+        ]),
+      );
+      const done = events.find((event) => event.type === "done");
+      expect(done?.message?.content?.[0]).toMatchObject({
+        type: "toolCall",
+        name: "web_search",
+        arguments: { query: "Pudong weather today" },
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
+  it("blocks repeated prompt-json web tool calls after deterministic web tool errors", async () => {
+    const server = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        res.end(
+          JSON.stringify({
+            created: 1781146473,
+            usage: {
+              completion_tokens: 12,
+              prompt_tokens: 200,
+              total_tokens: 212,
+            },
+            model: "AliceBase",
+            id: "chatcmpl-prompt-json-loop",
+            choices: [
+              {
+                finish_reason: "stop",
+                index: 0,
+                message: {
+                  role: "assistant",
+                  tool_calls: [],
+                  content:
+                    '<tool_call>{"name":"web_search","arguments":{"query":"Shanghai weather"}}</tool_call>',
+                },
+              },
+            ],
+            object: "chat.completion",
+          }),
+        );
+      });
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Missing loopback server address");
+      }
+      const model = {
+        id: "AliceBase",
+        name: "AliceBase",
+        api: "openai-completions",
+        provider: "wind",
+        baseUrl: `http://127.0.0.1:${address.port}/v1`,
+        reasoning: false,
+        input: ["text"],
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        contextWindow: 128000,
+        maxTokens: 4096,
+        compat: {
+          toolCallMode: "prompt-json",
+        },
+      } as unknown as Model<"openai-completions">;
+      const stream = createOpenAICompletionsTransportStreamFn()(
+        model,
+        {
+          systemPrompt: "system",
+          messages: [
+            {
+              role: "user",
+              content: "Pudong weather today",
+              timestamp: Date.now(),
+            },
+            {
+              role: "toolResult",
+              toolName: "web_search",
+              toolCallId: "call_1",
+              isError: true,
+              content:
+                "SearXNG base URL is not configured. Set SEARXNG_BASE_URL or configure plugins.entries.searxng.config.webSearch.baseUrl.",
+              timestamp: Date.now(),
+            },
+          ],
+          tools: [
+            {
+              name: "web_search",
+              description: "Search the web",
+              parameters: {
+                type: "object",
+                properties: { query: { type: "string" } },
+                required: ["query"],
+              },
+            },
+          ],
+        } as never,
+        { apiKey: "test-key" } as never,
+      );
+
+      const events: Array<{
+        type: string;
+        delta?: string;
+        reason?: string;
+        message?: { content?: unknown[] };
+      }> = [];
+      for await (const event of stream as AsyncIterable<{
+        type: string;
+        delta?: string;
+        reason?: string;
+        message?: { content?: unknown[] };
+      }>) {
+        events.push(event);
+      }
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "text_delta",
+            delta: expect.stringContaining("web_search 当前无法继续执行"),
+          }),
+          expect.objectContaining({ type: "done", reason: "stop" }),
+        ]),
+      );
+      const done = events.find((event) => event.type === "done");
+      expect(done?.message?.content?.[0]).toMatchObject({
+        type: "text",
+        text: expect.stringContaining("停止重复调用"),
+      });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it("does not double-count reasoning tokens and clamps uncached prompt usage at zero", () => {
     const model = {
       id: "gpt-5",

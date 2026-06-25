@@ -25,6 +25,12 @@ export function resetEmbeddedAgentBaseStreamFnCacheForTest(): void {
   embeddedAgentBaseStreamFnCache = new WeakMap<object, StreamFn | undefined>();
 }
 
+function requiresBoundaryAwareStreamFn(model: EmbeddedRunAttemptParams["model"]): boolean {
+  const compat = model.compat as { toolCallMode?: unknown } | undefined;
+  // 解决tool兼容问题：已有自定义 streamFn 时也要强制回到 boundary-aware transport，避免绕过文本工具协议。
+  return model.api === "openai-completions" && compat?.toolCallMode === "prompt-json";
+}
+
 export function describeEmbeddedAgentStreamStrategy(params: {
   currentStreamFn: StreamFn | undefined;
   providerStreamFn?: StreamFn;
@@ -40,6 +46,11 @@ export function describeEmbeddedAgentStreamStrategy(params: {
   }
   if (params.model.provider === "anthropic-vertex") {
     return "anthropic-vertex";
+  }
+  if (requiresBoundaryAwareStreamFn(params.model)) {
+    return createBoundaryAwareStreamFnForModel(params.model)
+      ? `boundary-aware:${params.model.api}`
+      : "stream-simple";
   }
   if (params.currentStreamFn === undefined || params.currentStreamFn === streamSimple) {
     return createBoundaryAwareStreamFnForModel(params.model)
@@ -61,6 +72,7 @@ export async function resolveEmbeddedAgentApiKey(params: {
   return params.authStorage ? await params.authStorage.getApiKey(params.provider) : undefined;
 }
 
+// 核心执行链路断点16：解析嵌入式 Agent stream 策略；观察 providerStreamFn、WebSocket、model.api、compat.toolCallMode；掌握标准：能说明模型配置如何决定后续请求实现。
 export function resolveEmbeddedAgentStreamFn(params: {
   currentStreamFn: StreamFn | undefined;
   providerStreamFn?: StreamFn;
@@ -102,6 +114,18 @@ export function resolveEmbeddedAgentStreamFn(params: {
 
   if (params.model.provider === "anthropic-vertex") {
     return createAnthropicVertexStreamFnForModel(params.model);
+  }
+
+  if (requiresBoundaryAwareStreamFn(params.model)) {
+    const boundaryAwareStreamFn = createBoundaryAwareStreamFnForModel(params.model);
+    if (boundaryAwareStreamFn) {
+      return wrapEmbeddedAgentStreamFn(boundaryAwareStreamFn, {
+        runSignal: params.signal,
+        resolvedApiKey: params.resolvedApiKey,
+        authStorage: params.authStorage,
+        providerId: params.model.provider,
+      });
+    }
   }
 
   if (params.currentStreamFn === undefined || params.currentStreamFn === streamSimple) {
