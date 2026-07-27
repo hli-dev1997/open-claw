@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { logWarn } from "../logger.js";
+import { logInfo, logWarn } from "../logger.js";
 import { setPluginToolMeta } from "../plugins/tools.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 import {
@@ -113,12 +113,28 @@ export async function materializeBundleMcpToolsForRun(params: {
       parameters: tool.inputSchema,
       execute: async (_toolCallId: string, input: unknown) => {
         params.runtime.markUsed();
+        const start = Date.now();
         const result = await params.runtime.callTool(tool.serverName, tool.toolName, input);
-        return toAgentToolResult({
+        const agentResult = toAgentToolResult({
           serverName: tool.serverName,
           toolName: tool.toolName,
           result,
         });
+        const elapsedMs = Date.now() - start;
+        let totalChars = 0;
+        if (Array.isArray(agentResult.content)) {
+          for (const item of agentResult.content) {
+            if (item && typeof item === "object" && "text" in item && typeof item.text === "string") {
+              totalChars += item.text.length;
+            }
+          }
+        }
+        const totalBytes = Buffer.byteLength(JSON.stringify(agentResult.content), "utf-8");
+        const estTokens = Math.ceil(totalChars / 3);
+        logInfo(
+          `bundle-mcp: tool "${tool.serverName}:${tool.toolName}" finished in ${elapsedMs}ms (${totalChars} chars, ${totalBytes} bytes, ~${estTokens} tokens)`,
+        );
+        return agentResult;
       },
     };
     setPluginToolMeta(agentTool, {
