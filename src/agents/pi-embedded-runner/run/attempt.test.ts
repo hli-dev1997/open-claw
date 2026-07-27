@@ -969,6 +969,47 @@ describe("wrapStreamFnConvertPromptJsonToolText", () => {
     });
   });
 
+  it("converts prompt-json tool calls with a tag name attribute", async () => {
+    const finalMessage = {
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text: '<tool_call name="web_search">{"query":"Shanghai news"}</tool_call>',
+        },
+      ],
+    };
+    const baseFn = vi.fn(() => createFakeStream({ events: [], resultMessage: finalMessage }));
+    const wrappedFn = wrapStreamFnConvertPromptJsonToolText(
+      baseFn as never,
+      new Set(["web_search"]),
+    );
+
+    const stream = await Promise.resolve(
+      wrappedFn(
+        {
+          provider: "wind",
+          id: "AliceBase",
+          api: "openai-completions",
+          compat: { toolCallMode: "prompt-json" },
+        } as never,
+        {} as never,
+        {} as never,
+      ),
+    );
+
+    expect(await stream.result()).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          name: "web_search",
+          arguments: { query: "Shanghai news" },
+        },
+      ],
+    });
+  });
+
   it("blocks repeated prompt-json web_fetch calls after deterministic safety errors", async () => {
     const finalMessage = {
       role: "assistant",

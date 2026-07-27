@@ -249,7 +249,10 @@ function normalizePromptJsonToolArguments(value: unknown): Record<string, unknow
   return undefined;
 }
 
-function normalizePromptJsonToolCall(value: unknown): PromptJsonToolCall | undefined {
+function normalizePromptJsonToolCall(
+  value: unknown,
+  nameHint?: string,
+): PromptJsonToolCall | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
@@ -263,11 +266,14 @@ function normalizePromptJsonToolCall(value: unknown): PromptJsonToolCall | undef
       ? candidate.name.trim()
       : typeof candidate.tool === "string"
         ? candidate.tool.trim()
-        : "";
+        : nameHint?.trim() || "";
   if (!name) {
     return undefined;
   }
-  const args = normalizePromptJsonToolArguments(candidate.arguments ?? candidate.input ?? {});
+  const hintedPayload = nameHint && candidate === record ? record : {};
+  const args = normalizePromptJsonToolArguments(
+    candidate.arguments ?? candidate.input ?? hintedPayload,
+  );
   if (!args) {
     return undefined;
   }
@@ -279,17 +285,29 @@ function parsePromptJsonToolCallText(text: string): PromptJsonToolCall | undefin
   if (!trimmed) {
     return undefined;
   }
-  const tagged = [...trimmed.matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi)]
-    .map((match) => match[1]?.trim())
-    .filter((value): value is string => Boolean(value));
-  const openTagged = [...trimmed.matchAll(/<tool_call>\s*([\s\S]*)$/gi)].at(-1)?.[1]?.trim();
+  const tagged = [...trimmed.matchAll(/<tool_call\b([^>]*)>\s*([\s\S]*?)\s*<\/tool_call>/gi)]
+    .map((match) => ({
+      text: match[2]?.trim(),
+      nameHint: parsePromptJsonToolCallTagNameHint(match[1] ?? ""),
+    }))
+    .filter((value): value is { text: string; nameHint?: string } => Boolean(value.text));
+  const openTagMatch = [...trimmed.matchAll(/<tool_call\b([^>]*)>\s*([\s\S]*)$/gi)].at(-1);
+  const openTagged = openTagMatch
+    ? {
+        text: openTagMatch[2]?.trim(),
+        nameHint: parsePromptJsonToolCallTagNameHint(openTagMatch[1] ?? ""),
+      }
+    : undefined;
   // 解决tool兼容问题：兼容模型可能输出说明文字、重复 <tool_call> 起始标签或漏掉 </tool_call>，这里按候选 payload 逐个解析。
-  const candidates = [...tagged.reverse(), openTagged, trimmed].filter((value): value is string =>
-    Boolean(value),
+  const candidates = [...tagged.reverse(), openTagged, { text: trimmed }].filter(
+    (value): value is { text: string; nameHint?: string } => Boolean(value?.text),
   );
   for (const candidate of candidates) {
-    for (const normalizedCandidate of buildPromptJsonToolCallJsonCandidates(candidate)) {
-      const toolCall = normalizePromptJsonToolCall(parseStreamingJson(normalizedCandidate));
+    for (const normalizedCandidate of buildPromptJsonToolCallJsonCandidates(candidate.text)) {
+      const toolCall = normalizePromptJsonToolCall(
+        parseStreamingJson(normalizedCandidate),
+        candidate.nameHint,
+      );
       if (toolCall) {
         return toolCall;
       }
@@ -298,9 +316,14 @@ function parsePromptJsonToolCallText(text: string): PromptJsonToolCall | undefin
   return undefined;
 }
 
+function parsePromptJsonToolCallTagNameHint(attributes: string): string | undefined {
+  const match = attributes.match(/\b(?:name|tool)\s*=\s*["']?([^"'\s>]+)["']?/i);
+  return match?.[1]?.trim() || undefined;
+}
+
 function buildPromptJsonToolCallJsonCandidates(text: string): string[] {
   const normalized = text
-    .replace(/^(?:\s*<tool_call>\s*)+/i, "")
+    .replace(/^(?:\s*<tool_call\b[^>]*>\s*)+/i, "")
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
