@@ -236,7 +236,8 @@ export default defineConfig(() => {
       "process.pid": "0",
       "process.ppid": "0",
       "process.argv": "[]",
-      "process.exit": "((code) => { throw new Error('process.exit(' + code + ') called in browser'); })",
+      "process.exit":
+        "((code) => { throw new Error('process.exit(' + code + ') called in browser'); })",
       "process.hrtime": "(() => [0, 0])",
       "process.nextTick": "((fn, ...args) => Promise.resolve().then(() => fn(...args)))",
     },

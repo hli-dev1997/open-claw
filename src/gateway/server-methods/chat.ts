@@ -3192,22 +3192,21 @@ export const chatHandlers: GatewayRequestHandlers = {
           },
         }),
       );
-      void emitUserTranscriptUpdate()
-        .catch((transcriptErr) => {
-          context.logGateway.warn(
-            formatNodeLog({
-              id: "gw.webchat.user.emit.error",
-              name: "显示用户消息失败",
-              summary: "前端 transcript 更新失败",
-              fields: {
-                runId: clientRunId,
-                sessionKey,
-                agentId,
-                error: formatForLog(transcriptErr),
-              },
-            }),
-          );
-        });
+      void emitUserTranscriptUpdate().catch((transcriptErr) => {
+        context.logGateway.warn(
+          formatNodeLog({
+            id: "gw.webchat.user.emit.error",
+            name: "显示用户消息失败",
+            summary: "前端 transcript 更新失败",
+            fields: {
+              runId: clientRunId,
+              sessionKey,
+              agentId,
+              error: formatForLog(transcriptErr),
+            },
+          }),
+        );
+      });
 
       let agentRunStarted = false;
       context.logGateway.info(
