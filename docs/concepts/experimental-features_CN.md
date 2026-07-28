@@ -21,11 +21,11 @@ OpenClaw 中的实验功能是**选择加入预览表面**。他们是
 
 ## 当前记录的标志
 
-|表面|关键|当 | 时使用它更多 |
-| ------------------------ | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-|本地模型运行时 | `agents.defaults.experimental.localModelLean` |更小或更严格的本地后端会阻塞 OpenClaw 的完整默认工具表面 | [本地模型](/gateway/local-models) |
-|内存搜索| `agents.defaults.memorySearch.experimental.sessionMemory` |你希望 `memory_search` 索引先前的会话记录并接受额外的存储/索引成本 | [内存配置参考](/reference/memory-config#session-memory-search-experimental) |
-|结构化规划工具| `tools.experimental.planTool` |你希望公开结构化的 `update_plan` 工具，以便在兼容的运行时和 UI 中进行多步骤工作跟踪 | [Gateway 配置参考](/gateway/config-tools#toolsexperimental) |
+| 表面           | 关键                                                      | 当                                                                                  | 时使用它更多                                                                |
+| -------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 本地模型运行时 | `agents.defaults.experimental.localModelLean`             | 更小或更严格的本地后端会阻塞 OpenClaw 的完整默认工具表面                            | [本地模型](/gateway/local-models)                                           |
+| 内存搜索       | `agents.defaults.memorySearch.experimental.sessionMemory` | 你希望 `memory_search` 索引先前的会话记录并接受额外的存储/索引成本                  | [内存配置参考](/reference/memory-config#session-memory-search-experimental) |
+| 结构化规划工具 | `tools.experimental.planTool`                             | 你希望公开结构化的 `update_plan` 工具，以便在兼容的运行时和 UI 中进行多步骤工作跟踪 | [Gateway 配置参考](/gateway/config-tools#toolsexperimental)                 |
 
 ## 本地模型精益模式
 

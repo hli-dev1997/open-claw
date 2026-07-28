@@ -24,7 +24,7 @@ title: "Typing indicators"
 将 `agents.defaults.typingMode` 设置为以下之一：
 
 - `never` — 永远没有打字指示器。
-- `instant` — 模型循环一开始**就开始输入，即使运行
+- `instant` — 模型循环一开始\*\*就开始输入，即使运行
   稍后仅返回静默回复token。
 - `thinking` — 开始输入**第一个推理增量**（需要
   `reasoningLevel: "stream"` 用于运行）。

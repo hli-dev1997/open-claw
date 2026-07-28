@@ -70,11 +70,11 @@ OpenClaw 保留当前会话上下文并更改回复路由：
 
 这些值是通道前缀的对等 ID：
 
-|价值|意义|
-| -------------- | ---------------------------- |
+| 价值           | 意义                                    |
+| -------------- | --------------------------------------- |
 | `telegram:123` | `telegram:123` Telegram 发件人 ID `123` |
-| `discord:456` | Discord 直接对等 ID `456` |
-| `slack:U123` | Slack 用户 ID `U123` |
+| `discord:456`  | Discord 直接对等 ID `456`               |
+| `slack:U123`   | Slack 用户 ID `U123`                    |
 
 规范密钥（上面的 `alice`）只是共享身份组名称。码头
 命令使用通道前缀值来证明源发送者和
@@ -85,12 +85,12 @@ OpenClaw 保留当前会话上下文并更改回复路由：
 Dock 命令是从支持本机的加载通道插件生成的
 命令。当前捆绑的命令：
 
-|目标渠道|命令|别名 |
-| -------------- | ------------------ | ------------------ |
-| Discord | `/dock-discord` | `/dock_discord` |
-|最重要| `/dock-mattermost` | `/dock_mattermost` |
-| Slack | `/dock-slack` | `/dock_slack` |
-| Telegram | `/dock-telegram` | `/dock_telegram` |
+| 目标渠道 | 命令               | 别名               |
+| -------- | ------------------ | ------------------ |
+| Discord  | `/dock-discord`    | `/dock_discord`    |
+| 最重要   | `/dock-mattermost` | `/dock_mattermost` |
+| Slack    | `/dock-slack`      | `/dock_slack`      |
+| Telegram | `/dock-telegram`   | `/dock_telegram`   |
 
 下划线别名在本机命令表面上很有用，例如 Telegram。
 
@@ -98,11 +98,11 @@ Dock 命令是从支持本机的加载通道插件生成的
 
 对接更新活动会话传递字段：
 
-|会话字段 | `/dock_discord` 之后的示例 |
-| ---------------- | ---------------------------------------------------- |
-| `lastChannel` | `discord` |
-| `lastTo` | `456` |
-| `lastAccountId` |目标频道帐户，或 `default` |
+| 会话字段        | `/dock_discord` 之后的示例 |
+| --------------- | -------------------------- |
+| `lastChannel`   | `discord`                  |
+| `lastTo`        | `456`                      |
+| `lastAccountId` | 目标频道帐户，或 `default` |
 
 这些字段保留在会话存储中并供以后的回复使用
 该会议的交付。

@@ -33,23 +33,23 @@ openclaw hooks info session-memory
 
 ## 事件类型
 
-|活动 |当它发生时 |
-| ------------------------ | ---------------------------------------------------------------------- |
-| `command:new` | `command:new` `/new` 命令已发出 |
-| `command:reset` | `/reset` 命令已发出 |
-| `command:stop` | `/stop` 命令已发出 |
-| `command` |任何命令事件（一般侦听器）|
-| `session:compact:before` |压缩前总结历史|
-| `session:compact:after` |压缩完成后|
-| `session:patch` |当会话属性被修改时 |
-| `agent:bootstrap` |在注入工作区引导文件之前 |
-| `gateway:startup` |通道启动并加载挂钩后 |
-| `gateway:shutdown` |网关何时开始关闭 |
-| `gateway:pre-restart` |在预期的网关重新启动之前 |
-| `message:received` |来自任何渠道的入站消息 |
-| `message:transcribed` |音频转录完成后 |
-| `message:preprocessed` |媒体和链接预处理完成或被跳过后 |
-| `message:sent` |已发送出站消息 |
+| 活动                     | 当它发生时                      |
+| ------------------------ | ------------------------------- |
+| `command:new`            | `command:new` `/new` 命令已发出 |
+| `command:reset`          | `/reset` 命令已发出             |
+| `command:stop`           | `/stop` 命令已发出              |
+| `command`                | 任何命令事件（一般侦听器）      |
+| `session:compact:before` | 压缩前总结历史                  |
+| `session:compact:after`  | 压缩完成后                      |
+| `session:patch`          | 当会话属性被修改时              |
+| `agent:bootstrap`        | 在注入工作区引导文件之前        |
+| `gateway:startup`        | 通道启动并加载挂钩后            |
+| `gateway:shutdown`       | 网关何时开始关闭                |
+| `gateway:pre-restart`    | 在预期的网关重新启动之前        |
+| `message:received`       | 来自任何渠道的入站消息          |
+| `message:transcribed`    | 音频转录完成后                  |
+| `message:preprocessed`   | 媒体和链接预处理完成或被跳过后  |
+| `message:sent`           | 已发送出站消息                  |
 
 ## 编写钩子
 
@@ -80,15 +80,15 @@ Detailed documentation goes here.
 
 **元数据字段** (`metadata.openclaw`)：
 
-|领域 |描述 |
-| ---------- | ---------------------------------------------------------------- |
-| `emoji` |显示 CLI 的表情符号 |
-| `events` |要侦听的事件数组 |
-| `export` |要使用的命名导出（默认为 `"default"`）|
-| `os` |所需平台（e.g.、`["darwin", "linux"]`）|
-| `requires` |所需的 `bins`、`anyBins`、`env` 或 `config` 路径 |
-| `always` |绕过资格检查（布尔值）|
-| `install` |安装方法 |
+| 领域       | 描述                                             |
+| ---------- | ------------------------------------------------ |
+| `emoji`    | 显示 CLI 的表情符号                              |
+| `events`   | 要侦听的事件数组                                 |
+| `export`   | 要使用的命名导出（默认为 `"default"`）           |
+| `os`       | 所需平台（e.g.、`["darwin", "linux"]`）          |
+| `requires` | 所需的 `bins`、`anyBins`、`env` 或 `config` 路径 |
+| `always`   | 绕过资格检查（布尔值）                           |
+| `install`  | 安装方法                                         |
 
 ### 处理程序实现
 
@@ -160,12 +160,12 @@ Npm 规范仅包含注册表（包名称 + 可选的确切版本或 dist-tag）�
 
 ## 捆绑钩子
 
-|钩|活动 |它有什么作用 |
-| -------------------- | ------------------------------------------ | ---------------------------------------------------------------- |
-|会话内存| `command:new`、`command:reset` |将会话上下文保存到 `<workspace>/memory/` |
-|引导额外文件 | `agent:bootstrap` |从 glob 模式注入额外的引导文件 |
-|命令记录器 | `command` |将所有命令记录到 `~/.openclaw/logs/commands.log` |
-|启动MD | `gateway:startup` |网关启动时运行 `BOOT.md` |
+| 钩           | 活动                           | 它有什么作用                                     |
+| ------------ | ------------------------------ | ------------------------------------------------ |
+| 会话内存     | `command:new`、`command:reset` | 将会话上下文保存到 `<workspace>/memory/`         |
+| 引导额外文件 | `agent:bootstrap`              | 从 glob 模式注入额外的引导文件                   |
+| 命令记录器   | `command`                      | 将所有命令记录到 `~/.openclaw/logs/commands.log` |
+| 启动MD       | `gateway:startup`              | 网关启动时运行 `BOOT.md`                         |
 
 启用任何捆绑的钩子：
 
@@ -320,8 +320,7 @@ openclaw hooks info my-hook
 ### 钩子未执行
 
 1. 验证钩子已启用：`openclaw hooks list`
-2. 重新启动网关进程，以便重新加载挂钩。
-3.检查网关日志：`./scripts/clawlog.sh | grep hook`
+2. 重新启动网关进程，以便重新加载挂钩。3.检查网关日志：`./scripts/clawlog.sh | grep hook`
 
 ## 相关
 

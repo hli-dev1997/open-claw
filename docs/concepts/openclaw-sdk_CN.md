@@ -25,24 +25,24 @@ OpenClaw 进程。当脚本、仪表板、CI 作业、IDE 时使用 `@openclaw/s
 
 `@openclaw/sdk` 附带：
 
-|表面|状态 |它有什么作用 |
-| ---------------------------------- | ------ | -------------------------------------------------------------------------------------- |
-| `OpenClaw` | `OpenClaw`准备好 |主要客户端入口点。拥有传输、连接、请求和事件。 |
-| `GatewayClientTransport` |准备好 | WebSocket 传输由 Gateway 客户端支持。                          |
-| `oc.agents` |准备好 |列出、创建、更新、删除和获取智能体句柄。                  |
-| `Agent.run()` |准备好 |启动 Gateway `agent` 运行并返回 `Run`。                          |
-| `oc.runs` |准备好 |创建、获取、等待、取消和流运行。                       |
-| `Run.events()` |准备好 |流式传输规范化的每次运行事件并重播以实现快速运行。               |
-| `Run.wait()` |准备好 |调用 `agent.wait` 并返回稳定的 `RunResult`。                       |
-| `Run.cancel()` |准备好 |通过运行 ID 调用 `sessions.abort`，并使用可用的会话密钥。         |
-| `oc.sessions` |准备好 |创建、解析、发送、修补、压缩和获取会话句柄。  |
-| `Session.send()` |准备好 |调用 `sessions.send` 并返回 `Run`。                                 |
-| `oc.models` |准备好 |调用 `models.list` 和当前 `models.authStatus` 状态 RPC。        |
-| `oc.tools` |准备好 |通过策略管道列出、范围和调用 Gateway 工具。      |
-| `oc.artifacts` |准备好 |列出、获取和下载 Gateway 转录工件。                   |
-| `oc.approvals` |准备好 |通过 Gateway 批准 RPC 列出并解析执行批准。           |
-| `oc.rawEvents()` |准备好 |为高级消费者公开原始 Gateway 事件。                         |
-| `normalizeGatewayEvent()` |准备好 |将原始 Gateway 事件转换为稳定的 SDK 事件形状。               |
+| 表面                      | 状态             | 它有什么作用                                              |
+| ------------------------- | ---------------- | --------------------------------------------------------- |
+| `OpenClaw`                | `OpenClaw`准备好 | 主要客户端入口点。拥有传输、连接、请求和事件。            |
+| `GatewayClientTransport`  | 准备好           | WebSocket 传输由 Gateway 客户端支持。                     |
+| `oc.agents`               | 准备好           | 列出、创建、更新、删除和获取智能体句柄。                  |
+| `Agent.run()`             | 准备好           | 启动 Gateway `agent` 运行并返回 `Run`。                   |
+| `oc.runs`                 | 准备好           | 创建、获取、等待、取消和流运行。                          |
+| `Run.events()`            | 准备好           | 流式传输规范化的每次运行事件并重播以实现快速运行。        |
+| `Run.wait()`              | 准备好           | 调用 `agent.wait` 并返回稳定的 `RunResult`。              |
+| `Run.cancel()`            | 准备好           | 通过运行 ID 调用 `sessions.abort`，并使用可用的会话密钥。 |
+| `oc.sessions`             | 准备好           | 创建、解析、发送、修补、压缩和获取会话句柄。              |
+| `Session.send()`          | 准备好           | 调用 `sessions.send` 并返回 `Run`。                       |
+| `oc.models`               | 准备好           | 调用 `models.list` 和当前 `models.authStatus` 状态 RPC。  |
+| `oc.tools`                | 准备好           | 通过策略管道列出、范围和调用 Gateway 工具。               |
+| `oc.artifacts`            | 准备好           | 列出、获取和下载 Gateway 转录工件。                       |
+| `oc.approvals`            | 准备好           | 通过 Gateway 批准 RPC 列出并解析执行批准。                |
+| `oc.rawEvents()`          | 准备好           | 为高级消费者公开原始 Gateway 事件。                       |
+| `normalizeGatewayEvent()` | 准备好           | 将原始 Gateway 事件转换为稳定的 SDK 事件形状。            |
 
 SDK 还导出这些表面使用的核心类型：
 `AgentRunParams`、`RunResult`、`RunStatus`、`OpenClawEvent`、
@@ -168,28 +168,28 @@ type OpenClawEvent = {
 
 常见的事件类型包括：
 
-|活动类型|来源 Gateway 事件 |
-| -------------------- | ------------------------------------------- |
-| `run.started` | `run.started` `agent` 生命周期开始 |
-| `run.completed` | `agent` 生命周期结束 |
-| `run.failed` | `agent` 生命周期错误 |
-| `run.cancelled` |中止/取消生命周期结束 |
-| `run.timed_out` |超时生命周期结束 |
-| `assistant.delta` |助理流媒体Delta |
-| `assistant.message` |助理留言 |
-| `thinking.delta` |思考或计划流 |
-| `tool.call.started` |工具/项目/命令启动 |
-| `tool.call.delta` |工具/项目/命令更新 |
-| `tool.call.completed` |工具/项目/命令完成 |
-| `tool.call.failed` |工具/项目/命令失败或阻止状态 |
-| `approval.requested` |执行或插件批准请求 |
-| `approval.resolved` | Exec或插件批准决议 |
-| `session.created` | `sessions.changed` 创建 |
-| `session.updated` | `sessions.changed` 更新 |
-| `session.compacted` | `sessions.changed` 压缩 |
-| `task.updated` |任务更新事件|
-| `artifact.updated` |补丁流事件 |
-| `raw` |尚未有稳定 SDK 映射的任何事件 |
+| 活动类型              | 来源 Gateway 事件                  |
+| --------------------- | ---------------------------------- |
+| `run.started`         | `run.started` `agent` 生命周期开始 |
+| `run.completed`       | `agent` 生命周期结束               |
+| `run.failed`          | `agent` 生命周期错误               |
+| `run.cancelled`       | 中止/取消生命周期结束              |
+| `run.timed_out`       | 超时生命周期结束                   |
+| `assistant.delta`     | 助理流媒体Delta                    |
+| `assistant.message`   | 助理留言                           |
+| `thinking.delta`      | 思考或计划流                       |
+| `tool.call.started`   | 工具/项目/命令启动                 |
+| `tool.call.delta`     | 工具/项目/命令更新                 |
+| `tool.call.completed` | 工具/项目/命令完成                 |
+| `tool.call.failed`    | 工具/项目/命令失败或阻止状态       |
+| `approval.requested`  | 执行或插件批准请求                 |
+| `approval.resolved`   | Exec或插件批准决议                 |
+| `session.created`     | `sessions.changed` 创建            |
+| `session.updated`     | `sessions.changed` 更新            |
+| `session.compacted`   | `sessions.changed` 压缩            |
+| `task.updated`        | 任务更新事件                       |
+| `artifact.updated`    | 补丁流事件                         |
+| `raw`                 | 尚未有稳定 SDK 映射的任何事件      |
 
 `Run.events()` 将事件过滤到一个运行 ID 并重播已见过的事件
 快速奔跑。这意味着记录的流程是安全的：

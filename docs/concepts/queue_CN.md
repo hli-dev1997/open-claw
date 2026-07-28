@@ -85,10 +85,8 @@ OpenClaw 回退到后续队列条目。
 
 对于模式选择，OpenClaw 解析：
 
-1. 内联或存储的每个会话 `/queue` 覆盖。
-2.`messages.queue.byChannel.<channel>`。
-3.`messages.queue.mode`。
-4. 默认`steer`。
+1. 内联或存储的每个会话 `/queue` 覆盖。2.`messages.queue.byChannel.<channel>`。3.`messages.queue.mode`。
+2. 默认`steer`。
 
 对于选项，内联或存储的 `/queue` 选项胜过配置。然后
 通道特定的去抖动 (`messages.queue.debounceMsByChannel`)，插件

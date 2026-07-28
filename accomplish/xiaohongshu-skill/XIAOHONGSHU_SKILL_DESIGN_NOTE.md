@@ -42,7 +42,7 @@ skills/xiaohongshu-publisher/SKILL.md
 ---
 name: xiaohongshu-publisher
 description: Use when publishing Xiaohongshu/小红书 notes through creator.xiaohongshu.com, especially 发布图文, 上传图文, 图文笔记, 发布笔记, draft creation, logged-in Chrome user browser automation, or Xiaohongshu creator platform workflows.
-metadata: {"openclaw":{"requires":{"config":["browser.enabled"]},"os":["win32"]}}
+metadata: { "openclaw": { "requires": { "config": ["browser.enabled"] }, "os": ["win32"] } }
 ---
 
 # Xiaohongshu Publisher
@@ -436,4 +436,3 @@ fields: profile, targetId, pathCount, hasRef, hasInputRef, hasElement
 6. browser tabs 日志显示选择的是 `creator.xiaohongshu.com`。
 7. browser action 日志显示没有反复创建 Chrome，只是在已有 user profile tabs 上操作。
 8. 发布流程默认停在最终发布前，除非用户明确授权直接发布。
-

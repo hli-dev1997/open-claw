@@ -8,13 +8,13 @@
 
 ## 一、设计原则
 
-| 原则 | 说明 |
-|---|---|
-| **全分支覆盖** | `if/else`、`try/catch`、所有异常路径均有日志 |
-| **安全截断** | 超长字段统一用 `.substring(0, 100) + "..."` 截断，禁用复杂正则 |
-| **堆栈保护** | catch 块内只提取 `err.message`、`err.code`、`err.status`，禁止打印整个 error 对象 |
-| **耗时对齐** | 所有成功返回节点和 finally 块必须携带 `elapsedMs`（P99 延迟监控基础） |
-| **格式统一** | 正常分支用 `[TRACE]`，异常分支用 `[ERROR]`，序号格式为 `[节点N.M:层名-动作]` |
+| 原则           | 说明                                                                              |
+| -------------- | --------------------------------------------------------------------------------- |
+| **全分支覆盖** | `if/else`、`try/catch`、所有异常路径均有日志                                      |
+| **安全截断**   | 超长字段统一用 `.substring(0, 100) + "..."` 截断，禁用复杂正则                    |
+| **堆栈保护**   | catch 块内只提取 `err.message`、`err.code`、`err.status`，禁止打印整个 error 对象 |
+| **耗时对齐**   | 所有成功返回节点和 finally 块必须携带 `elapsedMs`（P99 延迟监控基础）             |
+| **格式统一**   | 正常分支用 `[TRACE]`，异常分支用 `[ERROR]`，序号格式为 `[节点N.M:层名-动作]`      |
 
 ---
 
@@ -55,46 +55,46 @@ M1              记忆层
 
 ### 主链路节点
 
-| 序号 | 类型 | 所在文件 | 作用 | 关键字段 |
-|---|---|---|---|---|
-| `节点1.0:入口层-请求入口` | TRACE | `gateway/server-methods/chat.ts` | 网关接收用户原始 Query | sessionKey, rawQuery(截300) |
-| `节点2.0:路由层-技能路由` | TRACE | `auto-reply/reply/get-reply-inline-actions.ts` | 判断是否命中 `/skill` 命令（if/else 全覆盖） | skillName 或 commandBodyNormalized, 可用Skills数 |
-| `节点2.5:注入层-Skill提示注入` | TRACE | `agents/pi-embedded-runner/run/attempt.ts` | 将 Skill 内容注入 System Prompt（if/else 全覆盖） | skillsPrompt长度, 内容预览(截400) |
-| `节点3.0:执行层-主循环入口` | TRACE | `auto-reply/reply/agent-runner-execution.ts` | Web UI 主执行循环每次迭代的入口（iteration>1 说明发生了重试） | runId, sessionId, iteration, provider, model |
-| `节点3.1:执行层-模型选定` | TRACE | `auto-reply/reply/agent-runner-execution.ts` | Fallback 链路完成模型选定，进入本轮 LLM 执行 | runId, sessionId, provider, model |
-| `节点3.2:执行层-ContextToken预算` | TRACE | `agents/pi-embedded-runner/run/attempt.ts` | Token 上下文预算和工具结果截断阈值计算完毕 | runId, sessionId, contextTokenBudget, toolResultMaxChars |
-| `节点3.3:执行层-Compaction超时注册` | TRACE | `agents/pi-embedded-runner/run/attempt.ts` | 初始超时定时器注册，compactionTimeoutMs 为压缩宽限延长量 | runId, sessionId, timeoutMs, compactionTimeoutMs |
-| `节点3.4:执行层-Compaction超时触发` | ERROR | `agents/pi-embedded-runner/run/attempt.ts` | 定时器到期，强制 abort 当前 Agent 执行 | runId, sessionId, reason, timedOutDuringCompaction |
-| `节点4.0:推理层-LLM推理入口` | TRACE | `agents/pi-embedded-runner/run/attempt.ts` | `activeSession.prompt()` 调用前，LLM 请求即将发出 | runId, provider, model, contextMessages, tools数, prompt(截200) |
-| `节点4.1:推理层-降级-空闲超时重试` | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | LLM 长时间无输出，触发同模型重试 | provider, model, elapsedMs |
-| `节点4.2:推理层-降级-Profile轮换` | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | Auth Profile 轮换成功，准备重试 | provider, model, failoverReason, overloadRotations, elapsedMs |
-| `节点4.3:推理层-降级-Overload升级Fallback` | ERROR | `agents/pi-embedded-runner/run/assistant-failover.ts` | Profile 轮换次数超上限，升级为模型级 Fallback | provider, model, rotations, limit, status, elapsedMs |
-| `节点4.4:推理层-降级-限流` | ERROR | `agents/pi-embedded-runner/run/assistant-failover.ts` | 触发 rate_limit，进入 Profile 级 Fallback 升级流程 | provider, model, failoverReason, elapsedMs |
-| `节点4.5:推理层-降级-正常continue` | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | 无需降级，正常继续后续处理 | provider, model, elapsedMs |
-| `节点5.0:工具层-执行前` | TRACE | `agents/pi-tool-definition-adapter.ts` | 工具即将执行，记录入参 | tool, callId, params(截500) |
-| `节点5.1:工具层-执行后` | TRACE | `agents/pi-tool-definition-adapter.ts` | 工具执行完毕，记录结果 | tool, elapsedMs, rawResult(截500) |
-| `节点5.E1:工具层-veto拦截` | ERROR | `agents/pi-tool-definition-adapter.ts` | before_tool_call hook 拦截，工具不会实际执行 | tool, callId, reason(截100) |
-| `节点5.E2:工具层-执行异常` | ERROR | `agents/pi-tool-definition-adapter.ts` | 工具执行抛出异常，返回错误结果（不中断 Agent 主流程） | tool, callId, errMsg(截100), errCode, errStatus |
-| `节点6.0:推理层-LLM推理出口` | TRACE | `agents/pi-embedded-runner/run/attempt.ts` | `activeSession.prompt()` 返回，多轮推理结束 | runId, totalMessages, elapsedMs |
-| `节点6.E0:推理层-异常分类` | TRACE | `auto-reply/reply/agent-runner-execution.ts` | 捕获到异常，打印所有 isXxx 分类布尔值（一行覆盖所有分支） | runId, sessionId, msg(截100), isBilling, isContextOverflow, isCompaction, isSessionCorruption, isRoleOrder, isTransientHttp |
-| `节点6.E1:推理层-异常-ModelSwitch超重试` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | 模型实时切换重试次数超上限，放弃并返回错误 | runId, provider, model, retries, maxRetries |
-| `节点6.E2:推理层-异常-Context溢出` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | prompt 超出模型上下文窗口 | runId, sessionId, msg(截100) |
-| `节点6.E3:推理层-异常-计费错误` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | 账户余额/计费类错误 | runId, sessionId, isFallbackSummary |
-| `节点6.E4:推理层-异常-限流过载` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | 限流或服务过载，进入用户提示分支 | runId, sessionId, isRateLimit, isPureTransient |
-| `节点6.E5:推理层-异常-Compaction失败` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | 上下文压缩失败，触发会话重置 | runId, sessionId, msg(截100) |
-| `节点6.E6:推理层-异常-会话历史污染` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | Gemini function call 顺序错误，触发会话重置 | runId, sessionKey, corruptedSessionId |
-| `节点6.E7:推理层-异常-角色顺序错误` | ERROR | `auto-reply/reply/agent-runner-execution.ts` | assistant/user 消息顺序非法 | runId, sessionKey, msg(截100) |
-| `节点6.E8:推理层-异常-瞬时HTTP重试` | TRACE | `auto-reply/reply/agent-runner-execution.ts` | 502/521 等瞬时 HTTP 错误，延迟后重试全链路 | runId, msg(截100), retryDelayMs |
-| `节点7.0:合成层-最终响应` | TRACE | `auto-reply/reply/agent-runner.ts` | replyPayloads 组装完成，准备发送给用户 | payloads数, finalText(截300) |
+| 序号                                       | 类型  | 所在文件                                              | 作用                                                          | 关键字段                                                                                                                    |
+| ------------------------------------------ | ----- | ----------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `节点1.0:入口层-请求入口`                  | TRACE | `gateway/server-methods/chat.ts`                      | 网关接收用户原始 Query                                        | sessionKey, rawQuery(截300)                                                                                                 |
+| `节点2.0:路由层-技能路由`                  | TRACE | `auto-reply/reply/get-reply-inline-actions.ts`        | 判断是否命中 `/skill` 命令（if/else 全覆盖）                  | skillName 或 commandBodyNormalized, 可用Skills数                                                                            |
+| `节点2.5:注入层-Skill提示注入`             | TRACE | `agents/pi-embedded-runner/run/attempt.ts`            | 将 Skill 内容注入 System Prompt（if/else 全覆盖）             | skillsPrompt长度, 内容预览(截400)                                                                                           |
+| `节点3.0:执行层-主循环入口`                | TRACE | `auto-reply/reply/agent-runner-execution.ts`          | Web UI 主执行循环每次迭代的入口（iteration>1 说明发生了重试） | runId, sessionId, iteration, provider, model                                                                                |
+| `节点3.1:执行层-模型选定`                  | TRACE | `auto-reply/reply/agent-runner-execution.ts`          | Fallback 链路完成模型选定，进入本轮 LLM 执行                  | runId, sessionId, provider, model                                                                                           |
+| `节点3.2:执行层-ContextToken预算`          | TRACE | `agents/pi-embedded-runner/run/attempt.ts`            | Token 上下文预算和工具结果截断阈值计算完毕                    | runId, sessionId, contextTokenBudget, toolResultMaxChars                                                                    |
+| `节点3.3:执行层-Compaction超时注册`        | TRACE | `agents/pi-embedded-runner/run/attempt.ts`            | 初始超时定时器注册，compactionTimeoutMs 为压缩宽限延长量      | runId, sessionId, timeoutMs, compactionTimeoutMs                                                                            |
+| `节点3.4:执行层-Compaction超时触发`        | ERROR | `agents/pi-embedded-runner/run/attempt.ts`            | 定时器到期，强制 abort 当前 Agent 执行                        | runId, sessionId, reason, timedOutDuringCompaction                                                                          |
+| `节点4.0:推理层-LLM推理入口`               | TRACE | `agents/pi-embedded-runner/run/attempt.ts`            | `activeSession.prompt()` 调用前，LLM 请求即将发出             | runId, provider, model, contextMessages, tools数, prompt(截200)                                                             |
+| `节点4.1:推理层-降级-空闲超时重试`         | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | LLM 长时间无输出，触发同模型重试                              | provider, model, elapsedMs                                                                                                  |
+| `节点4.2:推理层-降级-Profile轮换`          | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | Auth Profile 轮换成功，准备重试                               | provider, model, failoverReason, overloadRotations, elapsedMs                                                               |
+| `节点4.3:推理层-降级-Overload升级Fallback` | ERROR | `agents/pi-embedded-runner/run/assistant-failover.ts` | Profile 轮换次数超上限，升级为模型级 Fallback                 | provider, model, rotations, limit, status, elapsedMs                                                                        |
+| `节点4.4:推理层-降级-限流`                 | ERROR | `agents/pi-embedded-runner/run/assistant-failover.ts` | 触发 rate_limit，进入 Profile 级 Fallback 升级流程            | provider, model, failoverReason, elapsedMs                                                                                  |
+| `节点4.5:推理层-降级-正常continue`         | TRACE | `agents/pi-embedded-runner/run/assistant-failover.ts` | 无需降级，正常继续后续处理                                    | provider, model, elapsedMs                                                                                                  |
+| `节点5.0:工具层-执行前`                    | TRACE | `agents/pi-tool-definition-adapter.ts`                | 工具即将执行，记录入参                                        | tool, callId, params(截500)                                                                                                 |
+| `节点5.1:工具层-执行后`                    | TRACE | `agents/pi-tool-definition-adapter.ts`                | 工具执行完毕，记录结果                                        | tool, elapsedMs, rawResult(截500)                                                                                           |
+| `节点5.E1:工具层-veto拦截`                 | ERROR | `agents/pi-tool-definition-adapter.ts`                | before_tool_call hook 拦截，工具不会实际执行                  | tool, callId, reason(截100)                                                                                                 |
+| `节点5.E2:工具层-执行异常`                 | ERROR | `agents/pi-tool-definition-adapter.ts`                | 工具执行抛出异常，返回错误结果（不中断 Agent 主流程）         | tool, callId, errMsg(截100), errCode, errStatus                                                                             |
+| `节点6.0:推理层-LLM推理出口`               | TRACE | `agents/pi-embedded-runner/run/attempt.ts`            | `activeSession.prompt()` 返回，多轮推理结束                   | runId, totalMessages, elapsedMs                                                                                             |
+| `节点6.E0:推理层-异常分类`                 | TRACE | `auto-reply/reply/agent-runner-execution.ts`          | 捕获到异常，打印所有 isXxx 分类布尔值（一行覆盖所有分支）     | runId, sessionId, msg(截100), isBilling, isContextOverflow, isCompaction, isSessionCorruption, isRoleOrder, isTransientHttp |
+| `节点6.E1:推理层-异常-ModelSwitch超重试`   | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | 模型实时切换重试次数超上限，放弃并返回错误                    | runId, provider, model, retries, maxRetries                                                                                 |
+| `节点6.E2:推理层-异常-Context溢出`         | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | prompt 超出模型上下文窗口                                     | runId, sessionId, msg(截100)                                                                                                |
+| `节点6.E3:推理层-异常-计费错误`            | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | 账户余额/计费类错误                                           | runId, sessionId, isFallbackSummary                                                                                         |
+| `节点6.E4:推理层-异常-限流过载`            | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | 限流或服务过载，进入用户提示分支                              | runId, sessionId, isRateLimit, isPureTransient                                                                              |
+| `节点6.E5:推理层-异常-Compaction失败`      | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | 上下文压缩失败，触发会话重置                                  | runId, sessionId, msg(截100)                                                                                                |
+| `节点6.E6:推理层-异常-会话历史污染`        | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | Gemini function call 顺序错误，触发会话重置                   | runId, sessionKey, corruptedSessionId                                                                                       |
+| `节点6.E7:推理层-异常-角色顺序错误`        | ERROR | `auto-reply/reply/agent-runner-execution.ts`          | assistant/user 消息顺序非法                                   | runId, sessionKey, msg(截100)                                                                                               |
+| `节点6.E8:推理层-异常-瞬时HTTP重试`        | TRACE | `auto-reply/reply/agent-runner-execution.ts`          | 502/521 等瞬时 HTTP 错误，延迟后重试全链路                    | runId, msg(截100), retryDelayMs                                                                                             |
+| `节点7.0:合成层-最终响应`                  | TRACE | `auto-reply/reply/agent-runner.ts`                    | replyPayloads 组装完成，准备发送给用户                        | payloads数, finalText(截300)                                                                                                |
 
 ### 子系统节点
 
-| 序号 | 类型 | 所在文件 | 作用 | 关键字段 |
-|---|---|---|---|---|
-| `节点C1:压缩层-Compaction开始` | TRACE | `agents/pi-embedded-runner/compact.ts` | 上下文压缩正式启动 | runId, sessionId, trigger, provider/model, messageCount, estTokens |
-| `节点C2:压缩层-Compaction完成` | TRACE | `agents/pi-embedded-runner/compact.ts` | 压缩成功 | runId, sessionId, tokensBefore, tokensAfter, compactedCount, messageCountAfter, **elapsedMs** |
-| `节点C.E:压缩层-Compaction失败` | ERROR | `agents/pi-embedded-runner/compact.ts` | 压缩过程出错，返回失败结果 | runId, sessionId, reason(截100), **elapsedMs** |
-| `节点M1:记忆层-Memory检索配置` | TRACE | `agents/memory-search.ts` | 向量+文本混合检索配置解析完毕 | agentId, vectorEnabled, vectorWeight, sources数, provider, **elapsedMs** |
+| 序号                            | 类型  | 所在文件                               | 作用                          | 关键字段                                                                                      |
+| ------------------------------- | ----- | -------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| `节点C1:压缩层-Compaction开始`  | TRACE | `agents/pi-embedded-runner/compact.ts` | 上下文压缩正式启动            | runId, sessionId, trigger, provider/model, messageCount, estTokens                            |
+| `节点C2:压缩层-Compaction完成`  | TRACE | `agents/pi-embedded-runner/compact.ts` | 压缩成功                      | runId, sessionId, tokensBefore, tokensAfter, compactedCount, messageCountAfter, **elapsedMs** |
+| `节点C.E:压缩层-Compaction失败` | ERROR | `agents/pi-embedded-runner/compact.ts` | 压缩过程出错，返回失败结果    | runId, sessionId, reason(截100), **elapsedMs**                                                |
+| `节点M1:记忆层-Memory检索配置`  | TRACE | `agents/memory-search.ts`              | 向量+文本混合检索配置解析完毕 | agentId, vectorEnabled, vectorWeight, sources数, provider, **elapsedMs**                      |
 
 ---
 
@@ -182,39 +182,43 @@ M1              记忆层
 
 ```typescript
 // 正常分支
-console.log(`[TRACE][节点N.M:层名-动作] key1="val1" key2=${num} elapsedMs=${Date.now() - startedAt}`);
+console.log(
+  `[TRACE][节点N.M:层名-动作] key1="val1" key2=${num} elapsedMs=${Date.now() - startedAt}`,
+);
 
 // 异常分支
-console.log(`[ERROR][节点N.M:层名-动作] key1="val1" errMsg="${err.message.substring(0, 100)}..." errCode="${err?.code ?? "none"}" errStatus="${err?.status ?? "none"}"`);
+console.log(
+  `[ERROR][节点N.M:层名-动作] key1="val1" errMsg="${err.message.substring(0, 100)}..." errCode="${err?.code ?? "none"}" errStatus="${err?.status ?? "none"}"`,
+);
 ```
 
 **字段命名约定**
 
-| 字段 | 说明 |
-|---|---|
-| `runId` | 每次 Agent 执行的唯一 ID，并发时用于串联请求 |
-| `sessionId` | 会话 ID（对应 transcript 文件） |
-| `sessionKey` | 用户侧会话标识（Web UI 显示的那个） |
-| `provider` | LLM 提供商（如 anthropic、openai） |
-| `model` | 模型 ID（如 claude-sonnet-4-6） |
-| `elapsedMs` | 当前节点到计时起点的耗时（ms），用于 P99 监控 |
+| 字段         | 说明                                              |
+| ------------ | ------------------------------------------------- |
+| `runId`      | 每次 Agent 执行的唯一 ID，并发时用于串联请求      |
+| `sessionId`  | 会话 ID（对应 transcript 文件）                   |
+| `sessionKey` | 用户侧会话标识（Web UI 显示的那个）               |
+| `provider`   | LLM 提供商（如 anthropic、openai）                |
+| `model`      | 模型 ID（如 claude-sonnet-4-6）                   |
+| `elapsedMs`  | 当前节点到计时起点的耗时（ms），用于 P99 监控     |
 | `msg(截100)` | 错误信息截断为 100 字，防止超大 HTTP 响应体被打印 |
 
 ---
 
 ## 六、已修改文件清单
 
-| 文件 | 修改内容 |
-|---|---|
-| `gateway/server-methods/chat.ts` | 节点 1.0 |
-| `auto-reply/reply/get-reply-inline-actions.ts` | 节点 2.0（if/else 全覆盖） |
-| `agents/pi-embedded-runner/run/attempt.ts` | 节点 2.5、3.2、3.3、3.4、4.0、6.0 |
-| `auto-reply/reply/agent-runner-execution.ts` | 节点 3.0、3.1、6.E0~E8 |
-| `agents/pi-tool-definition-adapter.ts` | 节点 5.0、5.1、5.E1、5.E2 |
-| `agents/pi-embedded-runner/run/assistant-failover.ts` | 节点 4.1~4.5 |
-| `auto-reply/reply/agent-runner.ts` | 节点 7.0 |
-| `agents/pi-embedded-runner/compact.ts` | 节点 C1、C2、C.E |
-| `agents/memory-search.ts` | 节点 M1 |
+| 文件                                                  | 修改内容                          |
+| ----------------------------------------------------- | --------------------------------- |
+| `gateway/server-methods/chat.ts`                      | 节点 1.0                          |
+| `auto-reply/reply/get-reply-inline-actions.ts`        | 节点 2.0（if/else 全覆盖）        |
+| `agents/pi-embedded-runner/run/attempt.ts`            | 节点 2.5、3.2、3.3、3.4、4.0、6.0 |
+| `auto-reply/reply/agent-runner-execution.ts`          | 节点 3.0、3.1、6.E0~E8            |
+| `agents/pi-tool-definition-adapter.ts`                | 节点 5.0、5.1、5.E1、5.E2         |
+| `agents/pi-embedded-runner/run/assistant-failover.ts` | 节点 4.1~4.5                      |
+| `auto-reply/reply/agent-runner.ts`                    | 节点 7.0                          |
+| `agents/pi-embedded-runner/compact.ts`                | 节点 C1、C2、C.E                  |
+| `agents/memory-search.ts`                             | 节点 M1                           |
 
 ---
 

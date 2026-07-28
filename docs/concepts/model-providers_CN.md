@@ -76,7 +76,7 @@ sidebarTitle: "Model providers"
 
 ## 内置提供商（pi-ai 目录）
 
-OpenClaw 随 pi‑ai 目录一起提供。这些提供商不需要** `models.providers` 配置；只需设置认证+选择一个模型。
+OpenClaw 随 pi‑ai 目录一起提供。这些提供商不需要\*\* `models.providers` 配置；只需设置认证+选择一个模型。
 
 ### OpenAI
 
@@ -278,32 +278,32 @@ Gemini CLI JSON 回复从 `response` 解析；用法回落到 `stats`，其中 `
 
 ### 其他捆绑的提供商插件
 
-|供应商|身份证 |验证环境 |示例模型 |
-| ----------------------- | -------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------- |
-|字节加 | `byteplus` / `byteplus-plan` | `BYTEPLUS_API_KEY` | `byteplus-plan/ark-code-latest` |
-|大脑 | `cerebras` | `CEREBRAS_API_KEY` | `cerebras/zai-glm-4.7` |
-| Cloudflare AI Gateway | `cloudflare-ai-gateway` | `CLOUDFLARE_AI_GATEWAY_API_KEY` | — |
-|深基础设施 | `deepinfra` | `DEEPINFRA_API_KEY` | `deepinfra/deepseek-ai/DeepSeek-V3.2` |
-|深度搜索| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek/deepseek-v4-flash` |
-| GitHub 副驾驶 | `github-copilot` | `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN` | — |
-|格罗克 | `groq` | `GROQ_API_KEY` | — |
-|拥抱脸推理 | `huggingface` | `HUGGINGFACE_HUB_TOKEN` 或 `HF_TOKEN` | `huggingface/deepseek-ai/DeepSeek-R1` |
-|基洛 Gateway | `kilocode` | `KILOCODE_API_KEY` | `kilocode/kilo/auto` |
-|基米编码| `kimi` | `KIMI_API_KEY` 或 `KIMICODE_API_KEY` | `kimi/kimi-code` |
-|最小最大 | `minimax` / `minimax-portal` | `MINIMAX_API_KEY` / `MINIMAX_OAUTH_TOKEN` | `minimax/MiniMax-M2.7` |
-|米斯特拉尔| `mistral` | `MISTRAL_API_KEY` | `mistral/mistral-large-latest` |
-|登月计划 | `moonshot` | `MOONSHOT_API_KEY` | `moonshot/kimi-k2.6` |
-| NVIDIA | `nvidia` | `NVIDIA_API_KEY` | `nvidia/nvidia/nemotron-3-super-120b-a12b` |
-| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | `openrouter/auto` |
-|千帆 | `qianfan` | `QIANFAN_API_KEY` | `qianfan/deepseek-v3.2` |
-|启文云 | `qwen` | `QWEN_API_KEY` / `MODELSTUDIO_API_KEY` / `DASHSCOPE_API_KEY` | `qwen/qwen3.5-plus` |
-|步趣 | `stepfun` / `stepfun-plan` | `STEPFUN_API_KEY` | `stepfun/step-3.5-flash` |
-|一起| `together` | `TOGETHER_API_KEY` | `together/moonshotai/Kimi-K2.5` |
-|威尼斯 | `venice` | `VENICE_API_KEY` | — |
-| Vercel AI Gateway | `vercel-ai-gateway` | `AI_GATEWAY_API_KEY` | `vercel-ai-gateway/anthropic/claude-opus-4.6` |
-|火山引擎（豆宝）| `volcengine` / `volcengine-plan` | `VOLCANO_ENGINE_API_KEY` | `volcengine-plan/ark-code-latest` |
-| xAI | `xai` | `XAI_API_KEY` | `xai/grok-4` |
-|小米| `xiaomi` | `XIAOMI_API_KEY` | `xiaomi/mimo-v2-flash` |
+| 供应商                | 身份证                           | 验证环境                                                     | 示例模型                                      |
+| --------------------- | -------------------------------- | ------------------------------------------------------------ | --------------------------------------------- |
+| 字节加                | `byteplus` / `byteplus-plan`     | `BYTEPLUS_API_KEY`                                           | `byteplus-plan/ark-code-latest`               |
+| 大脑                  | `cerebras`                       | `CEREBRAS_API_KEY`                                           | `cerebras/zai-glm-4.7`                        |
+| Cloudflare AI Gateway | `cloudflare-ai-gateway`          | `CLOUDFLARE_AI_GATEWAY_API_KEY`                              | —                                             |
+| 深基础设施            | `deepinfra`                      | `DEEPINFRA_API_KEY`                                          | `deepinfra/deepseek-ai/DeepSeek-V3.2`         |
+| 深度搜索              | `deepseek`                       | `DEEPSEEK_API_KEY`                                           | `deepseek/deepseek-v4-flash`                  |
+| GitHub 副驾驶         | `github-copilot`                 | `COPILOT_GITHUB_TOKEN` / `GH_TOKEN` / `GITHUB_TOKEN`         | —                                             |
+| 格罗克                | `groq`                           | `GROQ_API_KEY`                                               | —                                             |
+| 拥抱脸推理            | `huggingface`                    | `HUGGINGFACE_HUB_TOKEN` 或 `HF_TOKEN`                        | `huggingface/deepseek-ai/DeepSeek-R1`         |
+| 基洛 Gateway          | `kilocode`                       | `KILOCODE_API_KEY`                                           | `kilocode/kilo/auto`                          |
+| 基米编码              | `kimi`                           | `KIMI_API_KEY` 或 `KIMICODE_API_KEY`                         | `kimi/kimi-code`                              |
+| 最小最大              | `minimax` / `minimax-portal`     | `MINIMAX_API_KEY` / `MINIMAX_OAUTH_TOKEN`                    | `minimax/MiniMax-M2.7`                        |
+| 米斯特拉尔            | `mistral`                        | `MISTRAL_API_KEY`                                            | `mistral/mistral-large-latest`                |
+| 登月计划              | `moonshot`                       | `MOONSHOT_API_KEY`                                           | `moonshot/kimi-k2.6`                          |
+| NVIDIA                | `nvidia`                         | `NVIDIA_API_KEY`                                             | `nvidia/nvidia/nemotron-3-super-120b-a12b`    |
+| OpenRouter            | `openrouter`                     | `OPENROUTER_API_KEY`                                         | `openrouter/auto`                             |
+| 千帆                  | `qianfan`                        | `QIANFAN_API_KEY`                                            | `qianfan/deepseek-v3.2`                       |
+| 启文云                | `qwen`                           | `QWEN_API_KEY` / `MODELSTUDIO_API_KEY` / `DASHSCOPE_API_KEY` | `qwen/qwen3.5-plus`                           |
+| 步趣                  | `stepfun` / `stepfun-plan`       | `STEPFUN_API_KEY`                                            | `stepfun/step-3.5-flash`                      |
+| 一起                  | `together`                       | `TOGETHER_API_KEY`                                           | `together/moonshotai/Kimi-K2.5`               |
+| 威尼斯                | `venice`                         | `VENICE_API_KEY`                                             | —                                             |
+| Vercel AI Gateway     | `vercel-ai-gateway`              | `AI_GATEWAY_API_KEY`                                         | `vercel-ai-gateway/anthropic/claude-opus-4.6` |
+| 火山引擎（豆宝）      | `volcengine` / `volcengine-plan` | `VOLCANO_ENGINE_API_KEY`                                     | `volcengine-plan/ark-code-latest`             |
+| xAI                   | `xai`                            | `XAI_API_KEY`                                                | `xai/grok-4`                                  |
+| 小米                  | `xiaomi`                         | `XIAOMI_API_KEY`                                             | `xiaomi/mimo-v2-flash`                        |
 
 #### 值得了解的怪癖
 

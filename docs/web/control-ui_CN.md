@@ -188,12 +188,12 @@ Control UI 可以在首次加载时根据你的浏览器区域设置进行自身
 
 Control UI 附带了 `manifest.webmanifest` 和一个服务工作线程，因此现代浏览器可以将其安装为独立的 PWA。即使选项卡或浏览器窗口未打开，Web 推送也可以让 Gateway 通过通知唤醒已安装的 PWA。
 
-|表面|它有什么作用 |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `ui/public/manifest.webmanifest` | `ui/public/manifest.webmanifest` PWA 清单。一旦可以访问，浏览器就会提供“安装应用”。   |
-| `ui/public/sw.js` |处理 `push` 事件和通知点击的 Service Worker。 |
-| `push/vapid-keys.json`（在 OpenClaw 状态目录下）|自动生成的 VAPID 密钥对用于签署 Web 推送有效负载。       |
-| `push/web-push-subscriptions.json` |持久浏览器订阅端点。                          |
+| 表面                                             | 它有什么作用                                                                        |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| `ui/public/manifest.webmanifest`                 | `ui/public/manifest.webmanifest` PWA 清单。一旦可以访问，浏览器就会提供“安装应用”。 |
+| `ui/public/sw.js`                                | 处理 `push` 事件和通知点击的 Service Worker。                                       |
+| `push/vapid-keys.json`（在 OpenClaw 状态目录下） | 自动生成的 VAPID 密钥对用于签署 Web 推送有效负载。                                  |
+| `push/web-push-subscriptions.json`               | 持久浏览器订阅端点。                                                                |
 
 当你想要固定密钥（用于多主机部署、机密轮换或测试）时，通过 Gateway 进程上的环境变量覆盖 VAPID 密钥对：
 

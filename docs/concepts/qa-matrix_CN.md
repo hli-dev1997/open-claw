@@ -38,25 +38,25 @@ pnpm openclaw qa matrix [options]
 
 ### 常用标志
 
-|旗帜|默认 |描述 |
-| -------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `--profile <profile>` | `all` |情景简介。请参阅[配置文件](#profiles)。                                                                           |
-| `--fail-fast` |关闭 |在第一次失败的检查或场景后停止。                                                                         |
-| `--scenario <id>` | — |仅运行此场景。可重复。请参阅[场景](#scenarios)。                                                       |
-| `--output-dir <path>` | `<repo>/.artifacts/qa-e2e/matrix-<timestamp>` |报告、摘要、观察到的事件和输出日志都写入其中。相对路径针对 `--repo-root` 进行解析。 |
-| `--repo-root <path>` | `process.cwd()` |从中立工作目录调用时的存储库根目录。                                                        |
-| `--sut-account <id>` | `sut` | QA 网关配置中的 Matrix 帐户 ID。                                                                        |
+| 旗帜                  | 默认                                          | 描述                                                                                |
+| --------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `--profile <profile>` | `all`                                         | 情景简介。请参阅[配置文件](#profiles)。                                             |
+| `--fail-fast`         | 关闭                                          | 在第一次失败的检查或场景后停止。                                                    |
+| `--scenario <id>`     | —                                             | 仅运行此场景。可重复。请参阅[场景](#scenarios)。                                    |
+| `--output-dir <path>` | `<repo>/.artifacts/qa-e2e/matrix-<timestamp>` | 报告、摘要、观察到的事件和输出日志都写入其中。相对路径针对 `--repo-root` 进行解析。 |
+| `--repo-root <path>`  | `process.cwd()`                               | 从中立工作目录调用时的存储库根目录。                                                |
+| `--sut-account <id>`  | `sut`                                         | QA 网关配置中的 Matrix 帐户 ID。                                                    |
 
 ### 提供商标志
 
 该通道使用真正的 Matrix 传输，但模型提供商是可配置的：
 
-|旗帜|默认|描述 |
-| ------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 旗帜                     | 默认            | 描述                                                                                                     |
+| ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------- |
 | `--provider-mode <mode>` | `live-frontier` | `mock-openai` 用于确定性模拟调度，或 `live-frontier` 用于实时前沿提供商。旧别名 `live-openai` 仍然有效。 |
-| `--model <ref>` |提供商默认 |主要 `provider/model` 参考号                                                                                                             |
-| `--alt-model <ref>` |提供商默认|场景在运行中切换的备用 `provider/model` 参考。                                                                            |
-| `--fast` |关闭 |在支持的情况下启用提供商快速模式。                                                                                                |
+| `--model <ref>`          | 提供商默认      | 主要 `provider/model` 参考号                                                                             |
+| `--alt-model <ref>`      | 提供商默认      | 场景在运行中切换的备用 `provider/model` 参考。                                                           |
+| `--fast`                 | 关闭            | 在支持的情况下启用提供商快速模式。                                                                       |
 
 Matrix QA 不接受 `--credential-source` 或 `--credential-role`。该车道在当地提供一次性用户；没有可供租赁的共享凭证池。
 
@@ -64,15 +64,15 @@ Matrix QA 不接受 `--credential-source` 或 `--credential-role`。该车道在
 
 所选的配置文件决定运行哪些场景。
 
-|简介 |用它来 |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `all`（默认）|完整目录。缓慢但详尽。                                                                                                                                                                                                   |
-| `fast` |执行实时传输合约的发布门子集：金丝雀、提及门控、允许列表块、回复形状、重新启动恢复、线程跟进、线程隔离、反应观察和执行批准元数据传递。 |
-| `transport` |传输级线程、DM、房间、自动加入、提及/白名单、批准和反应场景。                                                                                                                                  |
-| `media` |图片、音频、视频、PDF、EPUB 附件覆盖范围。                                                                                                                                                                                  |
-| `e2ee-smoke` |最小 E2EE 覆盖范围 — 基本加密回复、线程跟进、引导成功。                                                                                                                                                  |
-| `e2ee-deep` |详尽的 E2EE 状态丢失、备份、密钥和恢复场景。                                                                                                                                                                     |
-| `e2ee-cli` | `openclaw matrix encryption setup` 和 `verify *` CLI 通过 QA 工具驱动的场景。                                                                                                                                       |
+| 简介          | 用它来                                                                                                                                 |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `all`（默认） | 完整目录。缓慢但详尽。                                                                                                                 |
+| `fast`        | 执行实时传输合约的发布门子集：金丝雀、提及门控、允许列表块、回复形状、重新启动恢复、线程跟进、线程隔离、反应观察和执行批准元数据传递。 |
+| `transport`   | 传输级线程、DM、房间、自动加入、提及/白名单、批准和反应场景。                                                                          |
+| `media`       | 图片、音频、视频、PDF、EPUB 附件覆盖范围。                                                                                             |
+| `e2ee-smoke`  | 最小 E2EE 覆盖范围 — 基本加密回复、线程跟进、引导成功。                                                                                |
+| `e2ee-deep`   | 详尽的 E2EE 状态丢失、备份、密钥和恢复场景。                                                                                           |
+| `e2ee-cli`    | `openclaw matrix encryption setup` 和 `verify *` CLI 通过 QA 工具驱动的场景。                                                          |
 
 确切的映射位于 `extensions/qa-matrix/src/runners/contract/scenario-catalog.ts` 中。
 
@@ -96,17 +96,17 @@ Matrix QA 不接受 `--credential-source` 或 `--credential-role`。该车道在
 
 ## 环境变量
 
-|变量|默认 |效果|
-| --------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPENCLAW_QA_MATRIX_TIMEOUT_MS` | `OPENCLAW_QA_MATRIX_TIMEOUT_MS` `1800000`（30 分钟）|整个运行的硬上限。                                                                                                                                                            |
-| `OPENCLAW_QA_MATRIX_CANARY_TIMEOUT_MS` | `45000` |即将收到最初的金丝雀回复。发布 CI 在共享运行器上提出了这个问题，因此在场景覆盖开始之前缓慢的第一个网关转弯不会失败。                                       |
-| `OPENCLAW_QA_MATRIX_NO_REPLY_WINDOW_MS` | `8000` |消极无回复断言的安静窗口。限制为 `≤` 运行超时。                                                                                                                 |
-| `OPENCLAW_QA_MATRIX_CLEANUP_TIMEOUT_MS` | `90000` |前往 Docker 拆解。故障表面包括恢复 `docker compose ... down --remove-orphans` 命令。                                                                           |
-| `OPENCLAW_QA_MATRIX_TUWUNEL_IMAGE` | `ghcr.io/matrix-construct/tuwunel:v1.5.1` |根据不同的 Tuwunel 版本进行验证时覆盖主服务器映像。                                                                                                             |
-| `OPENCLAW_QA_MATRIX_PROGRESS` |上 | `0` 使 stderr 上的 `[matrix-qa] ...` 进度线保持沉默。 `1` 强迫他们继续。                                                                                                                   |
-| `OPENCLAW_QA_MATRIX_CAPTURE_CONTENT` |已编辑 | `1` 将消息正文和 `formatted_body` 保留在 `matrix-qa-observed-events.json` 中。默认编辑以保证 CI 工件的安全。                                                                    |
-| `OPENCLAW_QA_MATRIX_DISABLE_FORCE_EXIT` |关闭 | `1` 在工件写入后跳过确定性 `process.exit`。默认强制退出，因为 Matrix-js-sdk 的本机加密句柄可以使事件循环在工件完成后保持活动状态。 |
-| `OPENCLAW_RUN_NODE_OUTPUT_LOG` |取消设置 |当由外部启动器 (e.g.`scripts/run-node.mjs`) 设置时，Matrix QA 会重用该日志路径，而不是启动自己的 tee。                                                                   |
+| 变量                                    | 默认                                                 | 效果                                                                                                                               |
+| --------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENCLAW_QA_MATRIX_TIMEOUT_MS`         | `OPENCLAW_QA_MATRIX_TIMEOUT_MS` `1800000`（30 分钟） | 整个运行的硬上限。                                                                                                                 |
+| `OPENCLAW_QA_MATRIX_CANARY_TIMEOUT_MS`  | `45000`                                              | 即将收到最初的金丝雀回复。发布 CI 在共享运行器上提出了这个问题，因此在场景覆盖开始之前缓慢的第一个网关转弯不会失败。               |
+| `OPENCLAW_QA_MATRIX_NO_REPLY_WINDOW_MS` | `8000`                                               | 消极无回复断言的安静窗口。限制为 `≤` 运行超时。                                                                                    |
+| `OPENCLAW_QA_MATRIX_CLEANUP_TIMEOUT_MS` | `90000`                                              | 前往 Docker 拆解。故障表面包括恢复 `docker compose ... down --remove-orphans` 命令。                                               |
+| `OPENCLAW_QA_MATRIX_TUWUNEL_IMAGE`      | `ghcr.io/matrix-construct/tuwunel:v1.5.1`            | 根据不同的 Tuwunel 版本进行验证时覆盖主服务器映像。                                                                                |
+| `OPENCLAW_QA_MATRIX_PROGRESS`           | 上                                                   | `0` 使 stderr 上的 `[matrix-qa] ...` 进度线保持沉默。 `1` 强迫他们继续。                                                           |
+| `OPENCLAW_QA_MATRIX_CAPTURE_CONTENT`    | 已编辑                                               | `1` 将消息正文和 `formatted_body` 保留在 `matrix-qa-observed-events.json` 中。默认编辑以保证 CI 工件的安全。                       |
+| `OPENCLAW_QA_MATRIX_DISABLE_FORCE_EXIT` | 关闭                                                 | `1` 在工件写入后跳过确定性 `process.exit`。默认强制退出，因为 Matrix-js-sdk 的本机加密句柄可以使事件循环在工件完成后保持活动状态。 |
+| `OPENCLAW_RUN_NODE_OUTPUT_LOG`          | 取消设置                                             | 当由外部启动器 (e.g.`scripts/run-node.mjs`) 设置时，Matrix QA 会重用该日志路径，而不是启动自己的 tee。                             |
 
 ## 输出工件
 

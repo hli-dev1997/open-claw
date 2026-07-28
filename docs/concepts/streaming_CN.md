@@ -129,12 +129,12 @@ Model output
 
 ### 频道映射
 
-|频道| `off` | `partial` | `block` | `progress` |
-| ---------- | -----| --------- | -------- | ----------------- |
-| Telegram | ✅ | ✅ | ✅ |映射到 `partial` |
-| Discord | ✅ | ✅ | ✅ |映射到 `partial` |
-| Slack | ✅ | ✅ | ✅ | ✅ |
-|最重要| ✅ | ✅ | ✅ | ✅ |
+| 频道     | `off` | `partial` | `block` | `progress`       |
+| -------- | ----- | --------- | ------- | ---------------- |
+| Telegram | ✅    | ✅        | ✅      | 映射到 `partial` |
+| Discord  | ✅    | ✅        | ✅      | 映射到 `partial` |
+| Slack    | ✅    | ✅        | ✅      | ✅               |
+| 最重要   | ✅    | ✅        | ✅      | ✅               |
 
 仅Slack：
 

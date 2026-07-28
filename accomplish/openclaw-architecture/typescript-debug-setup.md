@@ -78,6 +78,7 @@ runEmbeddedPiAgent()              ← 实际调用模型的地方
 ```
 
 **注意**：`agentCommandInternal`（位于 `src/agents/agent-command.ts`）只在以下场景被调用：
+
 - CLI 命令行调用
 - TUI 终端界面
 - OpenAI 兼容 HTTP 接口（`/v1/chat/completions`）
@@ -116,6 +117,7 @@ const runOpenClaw = async (deps) => {
 ```
 
 **关键点：**
+
 - `process.execArgv` 包含父进程自身的 Node.js 参数（如 `--inspect=9229`）
 - 子进程用 **不同端口**（9230）避免冲突
 - `--enable-source-maps` 无条件添加，让错误堆栈始终显示 `.ts` 真实行号
@@ -124,18 +126,13 @@ const runOpenClaw = async (deps) => {
 
 `Run → Edit Configurations → + → Attach to Node.js/Chrome`
 
-| 字段 | 值 |
-|------|-----|
+| 字段 | 值                |
+| ---- | ----------------- |
 | Name | `openclaw-attach` |
-| Host | `localhost` |
-| Port | `9230` |
+| Host | `localhost`       |
+| Port | `9230`            |
 
 ---
-
-
-
-
-
 
 ## Gateway（网关）详解
 
@@ -148,6 +145,7 @@ node scripts/run-node.mjs gateway --allow-unconfigured
 ```
 
 IDEA 调试配置中的 Application parameters 也是 `gateway --allow-unconfigured`，其中：
+
 - `gateway` — 启动网关模式
 - `--allow-unconfigured` — 允许在未完整配置的情况下启动（开发调试用）
 
@@ -179,17 +177,17 @@ startGatewayServer()
 
 ### Gateway 对外暴露的接口
 
-| 接口类型 | 路径 | 说明 |
-|----------|------|------|
-| Control UI | `http://127.0.0.1:18789/` | 浏览器对话界面（Lit 组件，Vite 构建） |
-| WebSocket RPC | `ws://127.0.0.1:18789/__openclaw/ws` | 前端所有 RPC 方法（`chat.send` 等）走这里 |
-| OpenAI 兼容 HTTP | `POST /v1/chat/completions` | 兼容 OpenAI SDK 调用（需配置开启） |
-| OpenResponses HTTP | `POST /v1/responses` | OpenResponses 协议（需配置开启） |
-| Embeddings HTTP | `POST /v1/embeddings` | Embeddings 接口 |
-| Plugin HTTP | `/__openclaw/plugins/*` | 各插件自定义 HTTP 路由 |
-| Canvas Host | `http://127.0.0.1:18789/__openclaw__/canvas/` | 内嵌 Canvas 宿主 |
-| Hooks | `/__openclaw/hooks/*` | 生命周期钩子回调端点 |
-| Health | `/__openclaw/health` | 健康检查 |
+| 接口类型           | 路径                                          | 说明                                      |
+| ------------------ | --------------------------------------------- | ----------------------------------------- |
+| Control UI         | `http://127.0.0.1:18789/`                     | 浏览器对话界面（Lit 组件，Vite 构建）     |
+| WebSocket RPC      | `ws://127.0.0.1:18789/__openclaw/ws`          | 前端所有 RPC 方法（`chat.send` 等）走这里 |
+| OpenAI 兼容 HTTP   | `POST /v1/chat/completions`                   | 兼容 OpenAI SDK 调用（需配置开启）        |
+| OpenResponses HTTP | `POST /v1/responses`                          | OpenResponses 协议（需配置开启）          |
+| Embeddings HTTP    | `POST /v1/embeddings`                         | Embeddings 接口                           |
+| Plugin HTTP        | `/__openclaw/plugins/*`                       | 各插件自定义 HTTP 路由                    |
+| Canvas Host        | `http://127.0.0.1:18789/__openclaw__/canvas/` | 内嵌 Canvas 宿主                          |
+| Hooks              | `/__openclaw/hooks/*`                         | 生命周期钩子回调端点                      |
+| Health             | `/__openclaw/health`                          | 健康检查                                  |
 
 ---
 
@@ -228,6 +226,7 @@ startGatewayServer()
 ### `--allow-unconfigured` 的作用
 
 正常情况下 Gateway 启动时会校验配置完整性（API Key、频道配置等）。`--allow-unconfigured` 绕过这个检查，适用于：
+
 - 本地开发调试
 - 仅配置了部分 Provider 时也能启动
 - CI/CD 环境测试
@@ -238,15 +237,9 @@ startGatewayServer()
 
 ![image-20260503192138484](https://notes-1307435281.cos.ap-shanghai.myqcloud.com/note/master/202605031921647.png)
 
-
-
-
-
 #### 2.再运行调试
 
 ![image-20260503192152186](https://notes-1307435281.cos.ap-shanghai.myqcloud.com/note/master/202605031921242.png)
-
-
 
 ## 五、调试启动流程
 

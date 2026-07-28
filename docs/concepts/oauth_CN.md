@@ -122,12 +122,7 @@ OpenAI Codex OAuth 明确支持在 Codex CLI 之外使用，包括 OpenClaw 工�
 
 流动形状 (PKCE)：
 
-1.生成PKCE验证者/挑战+随机`state`
-2.打开`https://auth.openai.com/oauth/authorize?...`
-3.尝试捕获 `http://127.0.0.1:1455/auth/callback` 回调
-4. 如果回调无法绑定（或者你是远程/headless），请粘贴重定向URL/code
-5. 兑换于`https://auth.openai.com/oauth/token`
-6. 从访问token中提取 `accountId` 并存储 `{ access, refresh, expires, accountId }`
+1.生成PKCE验证者/挑战+随机`state` 2.打开`https://auth.openai.com/oauth/authorize?...` 3.尝试捕获 `http://127.0.0.1:1455/auth/callback` 回调4. 如果回调无法绑定（或者你是远程/headless），请粘贴重定向URL/code 5. 兑换于`https://auth.openai.com/oauth/token` 6. 从访问token中提取 `accountId` 并存储 `{ access, refresh, expires, accountId }`
 
 向导路径为 `openclaw onboard` → 认证选择 `openai-codex`。
 

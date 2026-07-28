@@ -11,9 +11,9 @@
 
 #### 一个现实问题：看懂 vs 掌握
 
-| 层级 | 含义 | 需要多久 | 能做什么 |
-|------|------|---------|---------|
-| **看懂** | 跟着链路读明白每行代码在做什么 | 约 2 周 | 能描述流程，能回答原理问题 |
+| 层级     | 含义                                         | 需要多久          | 能做什么                         |
+| -------- | -------------------------------------------- | ----------------- | -------------------------------- |
+| **看懂** | 跟着链路读明白每行代码在做什么               | 约 2 周           | 能描述流程，能回答原理问题       |
 | **掌握** | 能改、能扩展、能排查 bug、能基于它开发新功能 | 3~6 个月+持续实践 | 能写新插件、接新模型、修核心 bug |
 
 > 光看懂不等于掌握，差距很大。看懂是指能跟着链路读明白每行代码在做什么。掌握是指能改它、能扩展它、能排查它的bug、能基于它开发新功能。
@@ -30,11 +30,11 @@
 
 #### 三个学习层次决定你的目标
 
-| 你的目标 | 学习方式 | 时间预估 |
-|---------|----------|---------|
-| 看懂项目干了什么 | 按本指南从头到尾跟一遍链路 | 1-2 周 |
-| 能在上面开发新插件/接新模型 | 跟着本指南看懂链路后，直接动手写代码 | 2-4 周 |
-| 深度掌握整个架构 | 看完链路后，改核心链路、跑测试、踩坑 | 3 个月以上持续实践 |
+| 你的目标                    | 学习方式                             | 时间预估           |
+| --------------------------- | ------------------------------------ | ------------------ |
+| 看懂项目干了什么            | 按本指南从头到尾跟一遍链路           | 1-2 周             |
+| 能在上面开发新插件/接新模型 | 跟着本指南看懂链路后，直接动手写代码 | 2-4 周             |
+| 深度掌握整个架构            | 看完链路后，改核心链路、跑测试、踩坑 | 3 个月以上持续实践 |
 
 > 先想清楚你要哪个层次，再决定怎么学。
 
@@ -110,11 +110,13 @@
 **对应 Java**：`@Controller` / `@RequestMapping`，接收外部请求
 
 **关键文件**：每个渠道插件在 `extensions/` 下，例如：
+
 - `extensions/telegram/` — Telegram Bot
 - `extensions/discord/` — Discord Bot
 - `extensions/whatsapp/` — WhatsApp
 
 **核心逻辑**（伪代码）：
+
 ```
 channel.on('message', (msg) => {
   // 1. 解析消息格式为统一结构
@@ -130,6 +132,7 @@ channel.on('message', (msg) => {
 ```
 
 **关键理解**：
+
 - 每个 Channel Plugin 是一个**适配器（Adapter）**，将不同平台的消息格式**统一化**
 - 统一的格式叫 `MsgContext`（消息上下文），包含：文本、发送者、会话标识、附件等
 - 插件只做"接收 -> 统一 -> 转发"，不做业务逻辑
@@ -144,24 +147,26 @@ channel.on('message', (msg) => {
 
 **关键方法**：
 
-| 方法 | 类比 Java | 作用 |
-|------|-----------|------|
-| `createChannelManager()` | `new ChannelManager()` | 创建渠道管理器，类似 Spring 容器的初始化 |
-| `startChannels()` | `@PostConstruct` | 启动所有已配置的渠道（相当于开启各平台的监听） |
-| `stopChannels()` | `@PreDestroy` | 优雅关闭所有渠道连接 |
+| 方法                     | 类比 Java              | 作用                                           |
+| ------------------------ | ---------------------- | ---------------------------------------------- |
+| `createChannelManager()` | `new ChannelManager()` | 创建渠道管理器，类似 Spring 容器的初始化       |
+| `startChannels()`        | `@PostConstruct`       | 启动所有已配置的渠道（相当于开启各平台的监听） |
+| `stopChannels()`         | `@PreDestroy`          | 优雅关闭所有渠道连接                           |
 
 **核心理解**：
+
 ```typescript
 // createChannelManager() 返回一个对象，包含以下关键能力：
 const channelManager = {
-  getRuntimeSnapshot,  // 当前渠道运行时快照（运行状态）
-  startChannels,       // 启动所有渠道（遍历配置，逐个 new 插件实例）
-  stopChannels,        // 停止所有渠道（断开连接）
-  restartChannel,      // 重启单个渠道（错误恢复）
+  getRuntimeSnapshot, // 当前渠道运行时快照（运行状态）
+  startChannels, // 启动所有渠道（遍历配置，逐个 new 插件实例）
+  stopChannels, // 停止所有渠道（断开连接）
+  restartChannel, // 重启单个渠道（错误恢复）
 };
 ```
 
 **Java 等价理解**：
+
 ```java
 public class ChannelManager {
     private Map<String, ChannelPlugin> channels = new HashMap<>();
@@ -187,12 +192,13 @@ public class ChannelManager {
 
 **关键方法**：
 
-| 方法 | 类比 Java | 作用 |
-|------|-----------|------|
-| `createAgentEventHandler()` | `@EventListener` | 创建 Agent 事件处理器，监听文本输出、工具调用等事件 |
-| `resolveHeartbeatAckMaxChars()` | 配置工具方法 | 解析心跳确认消息的最大字符数 |
+| 方法                            | 类比 Java        | 作用                                                |
+| ------------------------------- | ---------------- | --------------------------------------------------- |
+| `createAgentEventHandler()`     | `@EventListener` | 创建 Agent 事件处理器，监听文本输出、工具调用等事件 |
+| `resolveHeartbeatAckMaxChars()` | 配置工具方法     | 解析心跳确认消息的最大字符数                        |
 
 **核心理解**：
+
 - Agent 执行 LLM 时会不断产生事件（streaming 文本块、工具调用开始/结束、错误等）
 - `createAgentEventHandler()` 创建的回调函数会：
   1. 接收 Agent 的 streaming 文本块
@@ -200,6 +206,7 @@ public class ChannelManager {
   3. 处理 `[DONE]` 信号标记回复完成
 
 **Java 等价理解**：
+
 ```java
 // 类似于 WebSocket 的 streaming 推送
 public class AgentEventHandler {
@@ -238,13 +245,14 @@ getReplyFromConfig(ctx, opts, configOverride)
 
 **参数说明（类比 Java）**：
 
-| 参数 | 类型 | 类比 Java | 含义 |
-|------|------|-----------|------|
-| `ctx` | `MsgContext` | `HttpServletRequest` | 消息上下文：文本、发送者、渠道、附件 |
-| `opts` | `GetReplyOptions` | `@RequestParam` Map | 可选项：心跳标记、超时、技能过滤 |
-| `configOverride` | `OpenClawConfig` | 临时配置覆盖 | 测试时用的配置覆盖 |
+| 参数             | 类型              | 类比 Java            | 含义                                 |
+| ---------------- | ----------------- | -------------------- | ------------------------------------ |
+| `ctx`            | `MsgContext`      | `HttpServletRequest` | 消息上下文：文本、发送者、渠道、附件 |
+| `opts`           | `GetReplyOptions` | `@RequestParam` Map  | 可选项：心跳标记、超时、技能过滤     |
+| `configOverride` | `OpenClawConfig`  | 临时配置覆盖         | 测试时用的配置覆盖                   |
 
 **方法内关键步骤**：
+
 ```typescript
 export async function getReplyFromConfig(ctx, opts, configOverride) {
   // 步骤 1：解析运行配置
@@ -279,13 +287,15 @@ export async function getReplyFromConfig(ctx, opts, configOverride) {
 **关键文件**：`src/auto-reply/reply/get-reply-run.ts`，方法在第 347 行
 
 **方法签名**：
+
 ```typescript
 export async function runPreparedReply(
   params: RunPreparedReplyParams,
-): Promise<ReplyPayload | ReplyPayload[] | undefined>
+): Promise<ReplyPayload | ReplyPayload[] | undefined>;
 ```
 
 **核心职责**：
+
 1. 构建**系统提示（System Prompt）** -- 把 AGENTS.md、SOUL.md、TOOLS.md 等注入到 prompt 中
 2. 构建**用户消息** -- 把当前用户输入拼接好
 3. 调用 `agentCommand()` -> 发送给 LLM
@@ -294,10 +304,11 @@ export async function runPreparedReply(
 6. 返回 `ReplyPayload`（最终回复内容）
 
 **返回类型 `ReplyPayload` 的定义（类比 Java DTO）**：
+
 ```typescript
 type ReplyPayload = {
-  text?: string;       // 回复文本
-  mediaUrl?: string;   // 可选的媒体附件 URL
+  text?: string; // 回复文本
+  mediaUrl?: string; // 可选的媒体附件 URL
   mediaUrls?: string[]; // 多个媒体附件
 };
 ```
@@ -314,12 +325,13 @@ type ReplyPayload = {
 
 **两个入口方法**：
 
-| 方法 | 用途 | 信任级别 |
-|------|------|---------|
-| `agentCommand()` 第 1228 行 | CLI/本地调用 | senderIsOwner = true（完全信任） |
-| `agentCommandFromIngress()` 第 1251 行 | 网络入站（HTTP/WS） | 必须显式声明 senderIsOwner |
+| 方法                                   | 用途                | 信任级别                         |
+| -------------------------------------- | ------------------- | -------------------------------- |
+| `agentCommand()` 第 1228 行            | CLI/本地调用        | senderIsOwner = true（完全信任） |
+| `agentCommandFromIngress()` 第 1251 行 | 网络入站（HTTP/WS） | 必须显式声明 senderIsOwner       |
 
 **核心内部方法 `agentCommandInternal()`（第 425 行）** 的工作流：
+
 ```
 agentCommandInternal()
 +-- resolveAgentCommandDeps()      // 初始化依赖
@@ -341,6 +353,7 @@ agentCommandInternal()
 ```
 
 **关键设计模式**：
+
 - **策略模式**：根据配置选择 ACP 路径还是原生路径
 - **模板方法**：`agentCommandInternal` 定义了执行骨架，子流程可替换
 
@@ -353,6 +366,7 @@ agentCommandInternal()
 **关键文件**：`src/agents/anthropic-transport-stream.ts`
 
 **关键方法**（第 858 行）：
+
 ```typescript
 export function createAnthropicMessagesTransportStreamFn(): StreamFn {
   return (rawModel, context, rawOptions) => {
@@ -365,6 +379,7 @@ export function createAnthropicMessagesTransportStreamFn(): StreamFn {
 ```
 
 **核心工作**：
+
 ```typescript
 // 构建的 API 请求体大致结构：
 {
@@ -388,14 +403,16 @@ export function createAnthropicMessagesTransportStreamFn(): StreamFn {
 **关键文件**：`src/gateway/openai-http.ts`
 
 **关键方法**（第 517 行）：
+
 ```typescript
 export async function handleOpenAiHttpRequest(
-  req: IncomingMessage,   // HTTP 请求
-  res: ServerResponse,    // HTTP 响应
-): Promise<void>
+  req: IncomingMessage, // HTTP 请求
+  res: ServerResponse, // HTTP 响应
+): Promise<void>;
 ```
 
 **核心职责**：
+
 1. 接收来自各种渠道和 Control UI 的请求
 2. 转发到对应的 LLM Provider API
 3. 处理认证、限流、超时
@@ -473,73 +490,73 @@ flowchart TB
 
 ### 第 1 层验收（Channel Plugin）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| 如果要新增一个渠道（如飞书），需要在哪个目录新建插件？ | extensions/feishu/ |
-| Channel Plugin 的核心职责是什么？ | 适配器模式：将平台消息统一为 MsgContext |
-| 渠道插件里做业务逻辑（如天气查询）是对的吗？ | 不对，插件只做消息格式转换，业务逻辑在 auto-reply 层 |
-| 实操验证：找到 extensions/deepseek/openclaw.plugin.json，看 input 字段声明了什么？ | ["text"] -- 证明只支持文本输入 |
+| 验收问题                                                                           | 答案提示                                             |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 如果要新增一个渠道（如飞书），需要在哪个目录新建插件？                             | extensions/feishu/                                   |
+| Channel Plugin 的核心职责是什么？                                                  | 适配器模式：将平台消息统一为 MsgContext              |
+| 渠道插件里做业务逻辑（如天气查询）是对的吗？                                       | 不对，插件只做消息格式转换，业务逻辑在 auto-reply 层 |
+| 实操验证：找到 extensions/deepseek/openclaw.plugin.json，看 input 字段声明了什么？ | ["text"] -- 证明只支持文本输入                       |
 
 ### 第 2 层验收（server-channels.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| createChannelManager() 返回的对象类型叫什么？ | ChannelManager |
-| ChannelManager 的哪个方法负责启动所有 Channel？ | startChannels() |
-| 重启单个 Channel 用哪个方法？ | restartChannel() |
-| ChannelManager 如何追踪渠道的运行状态？ | 通过 channelStores: Map |
+| 验收问题                                        | 答案提示                |
+| ----------------------------------------------- | ----------------------- |
+| createChannelManager() 返回的对象类型叫什么？   | ChannelManager          |
+| ChannelManager 的哪个方法负责启动所有 Channel？ | startChannels()         |
+| 重启单个 Channel 用哪个方法？                   | restartChannel()        |
+| ChannelManager 如何追踪渠道的运行状态？         | 通过 channelStores: Map |
 
 ### 第 3 层验收（server-chat.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| createAgentEventHandler() 的作用是什么？ | 创建 Agent 事件处理器，监听 streaming 文本块等事件，实时推送给前端 |
-| Agent 执行过程中产生的 streaming 文本块通过什么机制推送到前端？ | 事件广播（broadcast）-> 前端 WebSocket |
-| 实操验证：在 server-chat.ts 中找到 resolveHeartbeatAckMaxChars 函数，它依赖什么配置？ | agents.defaults.heartbeat.ackMaxChars |
+| 验收问题                                                                              | 答案提示                                                           |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| createAgentEventHandler() 的作用是什么？                                              | 创建 Agent 事件处理器，监听 streaming 文本块等事件，实时推送给前端 |
+| Agent 执行过程中产生的 streaming 文本块通过什么机制推送到前端？                       | 事件广播（broadcast）-> 前端 WebSocket                             |
+| 实操验证：在 server-chat.ts 中找到 resolveHeartbeatAckMaxChars 函数，它依赖什么配置？ | agents.defaults.heartbeat.ackMaxChars                              |
 
 ### 第 4 层验收（get-reply.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| getReplyFromConfig 的第一个参数 ctx 的类型是什么？ | MsgContext |
-| 该函数执行过程中，哪一步负责读取 AGENTS.md 到工作区？ | ensureAgentWorkspace() |
-| 如果有图片消息进来，哪一步负责处理图片理解？ | applyMediaUnderstandingIfNeeded() |
-| 实操验证：手动给 getReplyFromConfig 加上 console.log 断点，然后发送一条消息，观察调用栈 | 见下方实操说明 |
-| 动手题：描述从收到你好到返回回复的完整调用链（说清楚调用了哪些文件） | 参考流程图 |
+| 验收问题                                                                                | 答案提示                          |
+| --------------------------------------------------------------------------------------- | --------------------------------- |
+| getReplyFromConfig 的第一个参数 ctx 的类型是什么？                                      | MsgContext                        |
+| 该函数执行过程中，哪一步负责读取 AGENTS.md 到工作区？                                   | ensureAgentWorkspace()            |
+| 如果有图片消息进来，哪一步负责处理图片理解？                                            | applyMediaUnderstandingIfNeeded() |
+| 实操验证：手动给 getReplyFromConfig 加上 console.log 断点，然后发送一条消息，观察调用栈 | 见下方实操说明                    |
+| 动手题：描述从收到你好到返回回复的完整调用链（说清楚调用了哪些文件）                    | 参考流程图                        |
 
 ### 第 5 层验收（get-reply-run.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| runPreparedReply() 返回什么类型？ | Promise<ReplyPayload | ReplyPayload[] | undefined> |
-| ReplyPayload 包含哪些字段？ | { text?, mediaUrl?, mediaUrls? } |
-| 什么情况下返回 undefined？ | 检测到 NO_REPLY 指令时 |
-| 实操验证：找到代码中处理 [DONE] 信号的地方，理解它代表什么 | streaming 结束信号 |
+| 验收问题                                                       | 答案提示                                  |
+| -------------------------------------------------------------- | ----------------------------------------- | -------------- | ---------- |
+| runPreparedReply() 返回什么类型？                              | Promise<ReplyPayload                      | ReplyPayload[] | undefined> |
+| ReplyPayload 包含哪些字段？                                    | { text?, mediaUrl?, mediaUrls? }          |
+| 什么情况下返回 undefined？                                     | 检测到 NO_REPLY 指令时                    |
+| 实操验证：找到代码中处理 [DONE] 信号的地方，理解它代表什么     | streaming 结束信号                        |
 | 动手题：如果你希望回复中添加一张图片，流程中哪些文件需要变更？ | get-reply-run.ts 中解析 MEDIA: 指令的位置 |
 
 ### 第 6 层验收（agent-command.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| agentCommand() 和 agentCommandFromIngress() 有什么区别？ | 前者默认 senderIsOwner=true（信任），后者需要显式声明 |
-| agentCommandInternal() 选择执行路径时，有哪两种路径？ | ACP 路径（外部 agent）和原生路径（直接调 LLM） |
-| prepareAgentCommandExecution() 做了哪些准备？ | 解析 session、构建 body、标准化 model/provider |
-| 实操验证：给 agentCommandInternal 入口加分治法日志，观察一次对话的调用时序 | |
+| 验收问题                                                                   | 答案提示                                              |
+| -------------------------------------------------------------------------- | ----------------------------------------------------- |
+| agentCommand() 和 agentCommandFromIngress() 有什么区别？                   | 前者默认 senderIsOwner=true（信任），后者需要显式声明 |
+| agentCommandInternal() 选择执行路径时，有哪两种路径？                      | ACP 路径（外部 agent）和原生路径（直接调 LLM）        |
+| prepareAgentCommandExecution() 做了哪些准备？                              | 解析 session、构建 body、标准化 model/provider        |
+| 实操验证：给 agentCommandInternal 入口加分治法日志，观察一次对话的调用时序 |                                                       |
 
 ### 第 7 层验收（Transport Stream）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| 该层构建的 API 请求体包含哪几部分？ | system prompt、messages history、tools definition、stream flag |
-| 为什么叫 transport stream？ | 因为它是 LLM 到 Agent 之间的数据传输流，处理 SSE 协议 |
-| 实操验证：在 createAnthropicMessagesTransportStreamFn 中打印构建好的请求体，观察一次完整的请求 | |
+| 验收问题                                                                                       | 答案提示                                                       |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 该层构建的 API 请求体包含哪几部分？                                                            | system prompt、messages history、tools definition、stream flag |
+| 为什么叫 transport stream？                                                                    | 因为它是 LLM 到 Agent 之间的数据传输流，处理 SSE 协议          |
+| 实操验证：在 createAnthropicMessagesTransportStreamFn 中打印构建好的请求体，观察一次完整的请求 |                                                                |
 
 ### 第 8 层验收（openai-http.ts）
 
-| 验收问题 | 答案提示 |
-|---------|---------|
-| handleOpenAiHttpRequest 的 req 和 res 是什么类型？ | Node.js IncomingMessage 和 ServerResponse |
-| 该文件除了转发请求外，还处理什么？ | 认证、限流、超时 |
+| 验收问题                                                                       | 答案提示                                                           |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| handleOpenAiHttpRequest 的 req 和 res 是什么类型？                             | Node.js IncomingMessage 和 ServerResponse                          |
+| 该文件除了转发请求外，还处理什么？                                             | 认证、限流、超时                                                   |
 | 高级题：如果要换 LLM Provider（比如从 DeepSeek 换成 OpenAI），需要改哪些地方？ | 主要是 extensions/ 下的 provider 插件配置，openai-http.ts 是通用层 |
 
 ---
@@ -571,6 +588,7 @@ flowchart TB
 **场景 1：WebChat 发一条消息没收到回复，怎么排查？**
 
 排查路径：
+
 1. 先看 Channel Plugin 有没有收到消息 -> 看 server-channels.ts 的日志
 2. 再看 getReplyFromConfig 有没有被调用
 3. 再看 agentCommand 有没有调 LLM
@@ -587,6 +605,7 @@ flowchart TB
 **场景 4：接入一个新的 LLM Provider（如通义千问），需要改哪些文件？**
 
 答：
+
 1. 在 extensions/ 下建新 provider 插件（如 extensions/qianwen/）
 2. 插件中实现 StreamFn（参考 extensions/deepseek/ 的实现）
 3. 在 openclaw.json 中配置新的 provider
@@ -606,20 +625,20 @@ flowchart TB
 
 ### 两种阅读方式
 
-| 方式 | 适合场景 | 做法 |
-|------|---------|------|
+| 方式     | 适合场景           | 做法                               |
+| -------- | ------------------ | ---------------------------------- |
 | 纵向阅读 | 第一遍建立整体认知 | 按本文档顺序，从第 1 层跟到第 8 层 |
-| 横向阅读 | 带着具体任务时 | 关注任务涉及的层，跳过无关的 |
+| 横向阅读 | 带着具体任务时     | 关注任务涉及的层，跳过无关的       |
 
 ### 推荐学习节奏
 
-| 时间 | 做什么 | 成果 |
-|------|-------|------|
-| 第 1 天 | 通读本文档，建立整体认知 | 能画出 8 层架构图 |
-| 第 2-3 天 | 纵向跟代码：第 1-3 层 | 理解消息入站 |
-| 第 4-6 天 | 纵向跟代码：第 4-5 层 | 理解自动回复编排 |
-| 第 7-9 天 | 纵向跟代码：第 6-8 层 | 理解 LLM 调用 |
-| 第 10-14 天 | 横向：带着具体任务读（比如接一个新模型） | 能改代码 |
+| 时间        | 做什么                                   | 成果              |
+| ----------- | ---------------------------------------- | ----------------- |
+| 第 1 天     | 通读本文档，建立整体认知                 | 能画出 8 层架构图 |
+| 第 2-3 天   | 纵向跟代码：第 1-3 层                    | 理解消息入站      |
+| 第 4-6 天   | 纵向跟代码：第 4-5 层                    | 理解自动回复编排  |
+| 第 7-9 天   | 纵向跟代码：第 6-8 层                    | 理解 LLM 调用     |
+| 第 10-14 天 | 横向：带着具体任务读（比如接一个新模型） | 能改代码          |
 
 ---
 
@@ -645,20 +664,20 @@ pnpm vitest run src/auto-reply/reply/ --reporter verbose
 
 ## 八、对照速查表
 
-| Java 概念 | OpenClaw 对应 | 文件:行号 |
-|-----------|--------------|----------|
-| @Controller / @RequestMapping | Channel Plugin | extensions/*/index.ts |
-| ChannelManager (管理所有渠道) | createChannelManager() | src/gateway/server-channels.ts:199 |
-| @EventListener (事件监听) | createAgentEventHandler() | src/gateway/server-chat.ts:157 |
-| @Service 核心编排方法 | getReplyFromConfig() | src/auto-reply/reply/get-reply.ts:175 |
-| @Transactional 事务方法 | runPreparedReply() | src/auto-reply/reply/get-reply-run.ts:347 |
-| FeignClient 远程调用封装 | agentCommand() / agentCommandInternal() | src/agents/agent-command.ts:1228 / :425 |
-| @RequestBody 构建器 | createAnthropicMessagesTransportStreamFn() | src/agents/anthropic-transport-stream.ts:858 |
-| RestTemplate.exchange() | handleOpenAiHttpRequest() | src/gateway/openai-http.ts:517 |
-| HttpServletRequest | MsgContext | src/auto-reply/types.ts |
-| @Configuration | OpenClawConfig | src/config/config.ts |
-| @Value 配置注入 | getRuntimeConfig() | src/config/io.ts |
-| DTO | ReplyPayload | src/auto-reply/reply-payload.ts |
+| Java 概念                     | OpenClaw 对应                              | 文件:行号                                    |
+| ----------------------------- | ------------------------------------------ | -------------------------------------------- |
+| @Controller / @RequestMapping | Channel Plugin                             | extensions/\*/index.ts                       |
+| ChannelManager (管理所有渠道) | createChannelManager()                     | src/gateway/server-channels.ts:199           |
+| @EventListener (事件监听)     | createAgentEventHandler()                  | src/gateway/server-chat.ts:157               |
+| @Service 核心编排方法         | getReplyFromConfig()                       | src/auto-reply/reply/get-reply.ts:175        |
+| @Transactional 事务方法       | runPreparedReply()                         | src/auto-reply/reply/get-reply-run.ts:347    |
+| FeignClient 远程调用封装      | agentCommand() / agentCommandInternal()    | src/agents/agent-command.ts:1228 / :425      |
+| @RequestBody 构建器           | createAnthropicMessagesTransportStreamFn() | src/agents/anthropic-transport-stream.ts:858 |
+| RestTemplate.exchange()       | handleOpenAiHttpRequest()                  | src/gateway/openai-http.ts:517               |
+| HttpServletRequest            | MsgContext                                 | src/auto-reply/types.ts                      |
+| @Configuration                | OpenClawConfig                             | src/config/config.ts                         |
+| @Value 配置注入               | getRuntimeConfig()                         | src/config/io.ts                             |
+| DTO                           | ReplyPayload                               | src/auto-reply/reply-payload.ts              |
 
 ---
 

@@ -26,19 +26,18 @@ title: "Agent loop"
    - 解决模型+思考/详细/跟踪默认值
    - 加载技能快照
    - 调用 `runEmbeddedPiAgent` （pi-agent-core 运行时）
-   - 如果嵌入循环未发出生命周期结束/错误，则发出**生命周期结束/错误**
-3.`runEmbeddedPiAgent`：
+   - 如果嵌入循环未发出生命周期结束/错误，则发出**生命周期结束/错误** 3.`runEmbeddedPiAgent`：
    - 通过每个会话+全局队列序列化运行
    - 解析模型+认证配置文件并构建 pi 会话
    - 订阅 pi 事件和流助手/工具增量
    - 强制超时 -> 如果超过则中止运行
    - 对于 Codex 应用服务器转动，中止已接受的转动，该转动在终端事件之前停止产生应用服务器进度
    - 返回有效负载+使用元数据
-4. `subscribeEmbeddedPiSession` 将 pi-agent-core 事件桥接到 OpenClaw `agent` 流：
+3. `subscribeEmbeddedPiSession` 将 pi-agent-core 事件桥接到 OpenClaw `agent` 流：
    - 工具事件 => `stream: "tool"`
    - 助理德尔塔 => `stream: "assistant"`
    - 生命周期事件 => `stream: "lifecycle"` (`phase: "start" | "end" | "error"`)
-5. `agent.wait` 使用 `waitForAgentRun`：
+4. `agent.wait` 使用 `waitForAgentRun`：
    - 等待 `runId` 的**生命周期结束/错误**
    - 返回 `{ status: ok|error|timeout, startedAt, endedAt, error? }`
 
